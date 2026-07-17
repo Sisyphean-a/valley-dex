@@ -3,6 +3,7 @@ package com.example.stardewoffline.feature.bootstrap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -10,9 +11,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun BootstrapRoute(
+    onReady: () -> Unit,
     viewModel: BootstrapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(state) { if (state is BootstrapUiState.Ready) onReady() }
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { selected ->
