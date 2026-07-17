@@ -1,5 +1,5 @@
 .codegraph/
-database/
+/database/
 local.properties
 *.jks
 *.keystore
