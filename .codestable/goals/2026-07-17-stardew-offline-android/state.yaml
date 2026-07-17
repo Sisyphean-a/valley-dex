@@ -14,8 +14,8 @@ non_goals:
 budget:
   kind: owner-defined
   limit: "连续实现至完整交付"
-current_iteration: 1
-next_action: "实现真实数据包安装、校验、激活与只读内容数据库启动链路。"
+current_iteration: 2
+next_action: "实现内容库摘要、详情、分类和搜索查询。"
 blocker_signature: null
 blocker_count: 0
 owner_stop: null
