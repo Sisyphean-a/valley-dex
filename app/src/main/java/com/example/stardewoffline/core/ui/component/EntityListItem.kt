@@ -4,9 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -16,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.example.stardewoffline.core.model.EntitySummary
 import java.io.File
 
@@ -24,8 +21,7 @@ import java.io.File
 fun EntityListItem(summary: EntitySummary, packageRoot: File?, subtitle: String? = null, onClick: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), tonalElevation = 1.dp) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            val image = summary.imagePath?.let { path -> packageRoot?.let { File(it, path) } }?.takeIf(File::isFile)
-            if (image == null) Spacer(Modifier.size(48.dp)) else AsyncImage(model = image, contentDescription = summary.nameZh, modifier = Modifier.size(48.dp))
+            EntityImage(summary.imagePath, packageRoot, summary.nameZh, Modifier.size(48.dp))
             Column(Modifier.weight(1f)) {
                 Text(summary.nameZh, style = MaterialTheme.typography.titleMedium)
                 summary.nameEn?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -33,5 +29,4 @@ fun EntityListItem(summary: EntitySummary, packageRoot: File?, subtitle: String?
             }
         }
     }
-    Spacer(Modifier.height(1.dp))
 }

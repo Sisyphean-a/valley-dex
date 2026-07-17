@@ -14,9 +14,9 @@ non_goals:
 budget:
   kind: owner-defined
   limit: "连续实现至完整交付"
-current_iteration: 4
-next_action: "补全文档、设备验收与最终功能验收。"
+current_iteration: 5
+next_action: "完成历史、设置、关于与缺失实体用户记录展示。"
 blocker_signature: null
 blocker_count: 0
 owner_stop: null
-updated_at: "2026-07-17"
+updated_at: "2026-07-18"

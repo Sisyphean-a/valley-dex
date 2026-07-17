@@ -26,7 +26,9 @@ fun AppNavHost() {
             composable(route = "home") { HomeRoute(onType = { nav.navigate("type/$it") }) }
             composable(route = "search") { SearchRoute(onDetail = { nav.navigate("detail/${Uri.encode(it)}") }) }
             composable(route = "type/{type}") { TypeListRoute(onDetail = { nav.navigate("detail/${Uri.encode(it)}") }) }
-            composable(route = "detail/{id}") { DetailRoute() }
+            composable(route = "detail/{id}") {
+                DetailRoute(onBack = { nav.popBackStack() }, onDetail = { nav.navigate("detail/${Uri.encode(it)}") })
+            }
             composable(route = "favorites") { FavoritesRoute(onDetail = { nav.navigate("detail/${Uri.encode(it)}") }) }
             composable(route = "more") { DataManagementRoute() }
         }
