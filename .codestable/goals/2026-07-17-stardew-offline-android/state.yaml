@@ -1,0 +1,22 @@
+schema_version: 1
+goal: stardew-offline-android
+status: active
+objective: "从零交付可安装、完全离线且使用真实 .svdata 的星露谷离线图鉴 Android 应用。"
+start_point: "工作区只有需求、真实 schema 2 数据包和数据库，没有 Android 工程。"
+acceptance:
+  - "Debug 与 Release APK 均能构建，Debug APK 可安装。"
+  - "无数据包时可通过系统文件选择器导入，真实数据包安装后可浏览和搜索。"
+  - "内容库只读，用户收藏、历史、笔记与设置独立保存并在数据包更新后保留。"
+  - "通过单元测试、Lint 和可用设备上的仪器测试；完成独立功能验收。"
+non_goals:
+  - "不联网、不抓取 Wiki、不读取玩家存档、不实现账号或云同步。"
+  - "不修改 stardew.db，不提交真实游戏数据或图片资源。"
+budget:
+  kind: owner-defined
+  limit: "连续实现至完整交付"
+current_iteration: 1
+next_action: "实现真实数据包安装、校验、激活与只读内容数据库启动链路。"
+blocker_signature: null
+blocker_count: 0
+owner_stop: null
+updated_at: "2026-07-17"

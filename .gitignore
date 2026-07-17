@@ -1,2 +1,12 @@
 .codegraph/
 database/
+local.properties
+*.jks
+*.keystore
+keystore.properties
+app/src/main/assets/default-data/*.svdata
+**/content/packages/
+**/content/staging/
+**/build/
+.idea/
+.gradle/
