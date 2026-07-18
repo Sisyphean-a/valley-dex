@@ -30,6 +30,18 @@ class AppPreferencesRepository @Inject constructor(
 
     suspend fun setLastValidatedPackage(id: String?) = edit { values -> values.setOrRemove(LAST_VALIDATED_PACKAGE_ID, id) }
 
+    suspend fun setThemeMode(value: String) = edit { it[THEME_MODE] = value }
+
+    suspend fun setDynamicColorEnabled(value: Boolean) = edit { it[DYNAMIC_COLOR_ENABLED] = value }
+
+    suspend fun setShowEnglishName(value: Boolean) = edit { it[SHOW_ENGLISH_NAME] = value }
+
+    suspend fun setShowTechnicalFields(value: Boolean) = edit { it[SHOW_TECHNICAL_FIELDS] = value }
+
+    suspend fun setSearchHistoryEnabled(value: Boolean) = edit { it[SEARCH_HISTORY_ENABLED] = value }
+
+    suspend fun setListLayoutMode(value: String) = edit { it[LIST_LAYOUT_MODE] = value }
+
     suspend fun update(block: (MutablePreferences) -> Unit) = context.appPreferencesDataStore.edit(block)
 
     private suspend fun edit(action: suspend (MutablePreferences) -> Unit) {
@@ -41,6 +53,7 @@ class AppPreferencesRepository @Inject constructor(
         previousPackageId = values[PREVIOUS_PACKAGE_ID],
         lastValidatedPackageId = values[LAST_VALIDATED_PACKAGE_ID],
         themeMode = values[THEME_MODE] ?: "system",
+        dynamicColorEnabled = values[DYNAMIC_COLOR_ENABLED] ?: false,
         showEnglishName = values[SHOW_ENGLISH_NAME] ?: true,
         showTechnicalFields = values[SHOW_TECHNICAL_FIELDS] ?: false,
         searchHistoryEnabled = values[SEARCH_HISTORY_ENABLED] ?: true,
@@ -56,6 +69,7 @@ class AppPreferencesRepository @Inject constructor(
         val PREVIOUS_PACKAGE_ID = stringPreferencesKey("previous_package_id")
         val LAST_VALIDATED_PACKAGE_ID = stringPreferencesKey("last_validated_package_id")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("dynamic_color_enabled")
         val SHOW_ENGLISH_NAME = booleanPreferencesKey("show_english_name")
         val SHOW_TECHNICAL_FIELDS = booleanPreferencesKey("show_technical_fields")
         val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")

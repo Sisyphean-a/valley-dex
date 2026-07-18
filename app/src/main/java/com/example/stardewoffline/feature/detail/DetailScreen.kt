@@ -41,6 +41,7 @@ import com.example.stardewoffline.core.model.DetailFact
 import com.example.stardewoffline.core.model.DetailRelation
 import com.example.stardewoffline.core.model.DetailRelationGroup
 import com.example.stardewoffline.core.ui.component.EntityImage
+import com.example.stardewoffline.core.ui.LocalAppPreferences
 
 @Composable
 fun DetailScreen(
@@ -53,6 +54,7 @@ fun DetailScreen(
     onDetail: (String) -> Unit,
 ) {
     val entity = state.entity
+    val settings = LocalAppPreferences.current
     if (entity == null) {
         DetailLoading(state.error)
         return
@@ -64,7 +66,7 @@ fun DetailScreen(
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { DetailHeader(state, displayName, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+            item { DetailHeader(state, displayName, settings.showEnglishName, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
             state.presentation?.facts?.takeIf { it.isNotEmpty() }?.let { facts ->
                 item { FactSection("核心信息", facts, Modifier.padding(horizontal = 16.dp)) }
             }
@@ -75,7 +77,7 @@ fun DetailScreen(
                 item { FactSection("别名", listOf(DetailFact("别名", aliases.joinToString("、"))), Modifier.padding(horizontal = 16.dp)) }
             }
             item { NoteSection(note, onSaveNote, Modifier.padding(horizontal = 16.dp)) }
-            state.presentation?.rawJson?.let { raw ->
+            state.presentation?.rawJson?.takeIf { settings.showTechnicalFields }?.let { raw ->
                 item { RawDataSection(raw, Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
             }
         }
@@ -109,13 +111,13 @@ private fun DetailTopBar(name: String, favorite: Boolean, onBack: () -> Unit, on
 }
 
 @Composable
-private fun DetailHeader(state: DetailUiState, displayName: String, modifier: Modifier) {
+private fun DetailHeader(state: DetailUiState, displayName: String, showEnglish: Boolean, modifier: Modifier) {
     val entity = requireNotNull(state.entity)
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         EntityImage(entity.imagePath, state.packageRoot, displayName, Modifier.size(104.dp))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(displayName, style = MaterialTheme.typography.headlineSmall)
-            entity.nameEn?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+            if (showEnglish) entity.nameEn?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
             Text(listOfNotNull(entity.entityType, entity.category).joinToString(" · "), style = MaterialTheme.typography.labelLarge)
             entity.descriptionZh?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             if (entity.descriptionZh.isNullOrBlank() && !entity.descriptionEn.isNullOrBlank()) {

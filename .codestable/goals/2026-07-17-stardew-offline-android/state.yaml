@@ -14,8 +14,8 @@ non_goals:
 budget:
   kind: owner-defined
   limit: "连续实现至完整交付"
-current_iteration: 5
-next_action: "完成历史、设置、关于与缺失实体用户记录展示。"
+current_iteration: 6
+next_action: "完成数据管理导入、诊断、旧包清理与质量测试。"
 blocker_signature: null
 blocker_count: 0
 owner_stop: null

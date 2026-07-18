@@ -27,6 +27,10 @@ class UserDataRepository @Inject constructor(private val dao: UserDataDao) {
         dao.trimHistory()
     }
 
+    suspend fun deleteHistory(id: String) = dao.deleteHistory(id)
+
+    suspend fun clearHistory() = dao.clearHistory()
+
     suspend fun saveNote(id: String, content: String, now: Long = System.currentTimeMillis()) {
         require(content.length <= 5000) { "笔记不能超过 5000 个字符" }
         if (content.isBlank()) dao.deleteNote(id) else dao.saveNote(NoteEntity(id, content, now))
@@ -36,4 +40,8 @@ class UserDataRepository @Inject constructor(private val dao: UserDataDao) {
         val current = dao.search(normalized)
         dao.saveSearch(RecentSearchEntity(normalized, display, now, (current?.useCount ?: 0) + 1))
     }
+
+    suspend fun deleteSearch(normalized: String) = dao.deleteSearch(normalized)
+
+    suspend fun clearSearches() = dao.clearSearches()
 }

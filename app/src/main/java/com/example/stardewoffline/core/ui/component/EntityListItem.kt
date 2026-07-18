@@ -15,16 +15,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.stardewoffline.core.model.EntitySummary
+import com.example.stardewoffline.core.ui.LocalAppPreferences
 import java.io.File
 
 @Composable
 fun EntityListItem(summary: EntitySummary, packageRoot: File?, subtitle: String? = null, onClick: () -> Unit) {
+    val settings = LocalAppPreferences.current
     Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), tonalElevation = 1.dp) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             EntityImage(summary.imagePath, packageRoot, summary.nameZh, Modifier.size(48.dp))
             Column(Modifier.weight(1f)) {
                 Text(summary.nameZh, style = MaterialTheme.typography.titleMedium)
-                summary.nameEn?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                if (settings.showEnglishName) summary.nameEn?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Text(subtitle ?: listOfNotNull(summary.entityType, summary.category).joinToString(" · "), style = MaterialTheme.typography.labelSmall)
             }
         }
