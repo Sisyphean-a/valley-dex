@@ -32,6 +32,7 @@ class DataPackageRepository @Inject constructor(
 
     suspend fun verifyActive(): AppResult<DataPackageInfo> = manager.verifyActive()
     suspend fun rollback(): AppResult<DataPackageInfo> = manager.rollback()
+    suspend fun deletePreviousPackage(): AppResult<Unit> = manager.deletePreviousPackage()
 
     private companion object {
         const val DEFAULT_DATA_DIRECTORY = "default-data"

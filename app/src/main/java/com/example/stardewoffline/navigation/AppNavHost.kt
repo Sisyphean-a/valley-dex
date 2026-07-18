@@ -62,7 +62,7 @@ fun AppNavHost() {
             ) }
             composable("history") { HistoryRoute(nav::popBackStack, onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("settings") { SettingsRoute() }
-            composable("data") { DataManagementRoute() }
+            composable("data") { DataManagementRoute(nav::popBackStack) }
             composable("about") { AboutRoute(nav::popBackStack) }
             composable("licenses") { LicensesRoute(nav::popBackStack) }
         }

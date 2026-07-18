@@ -57,6 +57,14 @@ class DataPackageManager @Inject constructor(
         return switchTo(previous, current.activePackageId)
     }
 
+    suspend fun deletePreviousPackage(): AppResult<Unit> {
+        val previous = preferences.current().previousPackageId ?: return AppResult.Success(Unit)
+        val directory = packageRoot(previous)
+        if (directory.exists() && !directory.deleteRecursively()) return AppResult.Failure(AppError.Unknown("无法删除旧数据包"))
+        preferences.setPreviousPackage(null)
+        return AppResult.Success(Unit)
+    }
+
     private suspend fun activate(info: DataPackageInfo): AppResult<DataPackageInfo> {
         val oldId = preferences.current().activePackageId
         return switchTo(info.id, oldId, info)
