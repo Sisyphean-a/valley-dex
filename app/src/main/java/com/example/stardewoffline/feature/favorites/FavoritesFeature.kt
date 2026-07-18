@@ -1,6 +1,5 @@
 package com.example.stardewoffline.feature.favorites
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,10 +27,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.database.user.FavoriteEntity
-import com.example.stardewoffline.core.model.EntitySummary
-import com.example.stardewoffline.core.ui.component.EntityListItem
+import com.example.stardewoffline.core.model.WikiEntry
+import com.example.stardewoffline.core.model.WikiEntrySummary
+import com.example.stardewoffline.core.ui.component.WikiEntryListItem
 import com.example.stardewoffline.data.ContentRepository
 import com.example.stardewoffline.data.UserDataRepository
+import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
@@ -39,11 +40,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class FavoriteRow(val record: FavoriteEntity, val summary: EntitySummary?)
+data class FavoriteRow(val record: FavoriteEntity, val entry: WikiEntry?)
 
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
     private val user: UserDataRepository,
+    private val catalogue: WikiCatalogue,
     private val content: ContentRepository,
 ) : ViewModel() {
     private val mutableRows = MutableStateFlow<List<FavoriteRow>>(emptyList())
@@ -55,8 +57,7 @@ class FavoritesViewModel @Inject constructor(
         viewModelScope.launch {
             mutableRoot.value = content.packageRoot()
             user.favorites().collect { favorites ->
-                val summaries = content.summaries(favorites.map(FavoriteEntity::entityId)).getOrNull().orEmpty()
-                mutableRows.value = favorites.map { FavoriteRow(it, summaries[it.entityId]) }
+                mutableRows.value = favorites.map { FavoriteRow(it, catalogue.entry(it.entityId).getOrNull()) }
             }
         }
     }
@@ -75,17 +76,17 @@ fun FavoritesRoute(onDetail: (String) -> Unit, viewModel: FavoritesViewModel = h
 private fun FavoritesScreen(rows: List<FavoriteRow>, root: File?, onDetail: (String) -> Unit, onRemove: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
     var types by remember { mutableStateOf(setOf<String>()) }
-    val knownTypes = rows.mapNotNull { it.summary?.entityType }.distinct()
+    val knownTypes = rows.mapNotNull { it.entry?.categoryLabel }.distinct()
     val visible = rows.filter { row ->
-        val name = row.summary?.nameZh ?: row.record.entityId
-        name.contains(query, ignoreCase = true) && (types.isEmpty() || row.summary?.entityType in types)
+        val title = row.entry?.title.orEmpty()
+        (row.entry == null || title.contains(query, ignoreCase = true)) && (types.isEmpty() || row.entry?.categoryLabel in types)
     }
     LazyColumn(Modifier.fillMaxSize()) {
         item { OutlinedTextField(query, { query = it }, Modifier.padding(16.dp), label = { Text("筛选收藏") }, singleLine = true) }
         item { knownTypes.forEach { type -> FilterChip(type in types, { types = types.toMutableSet().apply { if (!add(type)) remove(type) } }, { Text(type) }) } }
         items(visible, key = { it.record.entityId }) { row ->
-            val summary = row.summary
-            if (summary != null) EntityListItem(summary, root) { onDetail(summary.id) } else MissingFavorite(row.record.entityId, onRemove)
+            row.entry?.let { entry -> WikiEntryListItem(entry.toSummary(), root, onClick = { onDetail(entry.id) }) }
+                ?: MissingFavorite(row.record.entityId, onRemove)
         }
     }
 }
@@ -94,7 +95,15 @@ private fun FavoritesScreen(rows: List<FavoriteRow>, root: File?, onDetail: (Str
 private fun MissingFavorite(id: String, onRemove: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = androidx.compose.ui.Alignment.End) {
         Text("当前数据包中已不存在", modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleSmall)
-        Text(id, modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall)
         IconButton(onClick = { onRemove(id) }) { Icon(Icons.Filled.Delete, "删除收藏") }
     }
 }
+
+private fun WikiEntry.toSummary() = WikiEntrySummary(
+    id = id,
+    title = title,
+    englishTitle = englishTitle,
+    categoryLabel = categoryLabel,
+    filterCategory = null,
+    image = image,
+)

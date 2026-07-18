@@ -33,15 +33,13 @@ class DetailPresentationParserTest {
     }
 
     @Test
-    fun mapsShopItemsAndKeepsRuntimeConditionsAsText() {
+    fun ignoresUnknownShopRuntimeFields() {
         val presentation = DetailPresentationParser.present(entity("shop", """
             {"Currency":0,"Owners":[{"Name":"Willy"}],"Items":[{"ItemId":"(O)219","Price":250,"Condition":"SEASON summer"}]}
         """))
 
-        assertTrue(presentation.facts.any { it.label == "所有者" && it.value == "Willy" })
-        val item = presentation.relationGroups.single { it.title == "商品列表" }.relations.single()
-        assertEquals("(O)219", item.targetId)
-        assertTrue(item.details.any { it.value.contains("由游戏运行时判断") })
+        assertTrue(presentation.facts.isEmpty())
+        assertTrue(presentation.relationGroups.isEmpty())
     }
 
     private fun entity(type: String, extra: String) = EntityDetail(

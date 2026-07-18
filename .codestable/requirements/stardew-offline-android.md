@@ -3,7 +3,7 @@ doc_type: project-spec
 slug: stardew-offline-android
 status: ready-for-implementation
 language: zh-CN
-database_schema_version: 2
+database_schema_version: 4
 last_reviewed: 2026-07-17
 ---
 
@@ -615,8 +615,13 @@ resolvedPath.normalize() 必须位于 stagingRoot 内
 
 ```text
 format == "stardew-offline-data"
-schemaVersion == 2
+schemaVersion == 4
 language == "zh-CN"
+publishable == true
+quality.status == "passed"
+quality.dataErrors == 0
+quality.translations.missing == 0
+quality.translations.invalid == 0
 database.file 非空
 database.sha256 为合法 SHA-256
 ```
@@ -624,10 +629,10 @@ database.sha256 为合法 SHA-256
 当前 App 只支持：
 
 ```kotlin
-SUPPORTED_SCHEMA_VERSIONS = setOf(2)
+SUPPORTED_SCHEMA_VERSIONS = setOf(4)
 ```
 
-遇到更高版本必须拒绝启用，并提示更新 App。
+除 schema 4 外的版本必须拒绝启用，并提示更新 App。
 
 ### 8.3 数据库校验
 
@@ -646,9 +651,8 @@ ok
 读取：
 
 ```text
-build_meta.schema_version
-build_meta.locale
-build_meta.entity_count
+build_meta.schema_version、locale、entity_count、builder_version、generated_at、game_version、source_hash
+build_meta.artifact_metadata
 ```
 
 必须满足：
@@ -656,6 +660,8 @@ build_meta.entity_count
 ```text
 build_meta.schema_version == manifest.schemaVersion
 build_meta.locale == manifest.language
+build_meta 的生成时间、来源哈希、游戏版本与 manifest 一致
+artifact_metadata 的 schema、语言、生成时间、来源哈希、游戏版本、发布资格、内容统计、类型目录与质量信息均与 manifest 一致
 entities.count == build_meta.entity_count
 entities.count 与 manifest.content.entities 一致
 ```
@@ -664,6 +670,8 @@ entities.count 与 manifest.content.entities 一致
 
 ```text
 entity_search 数量应与 entities 数量合理接近
+manifest.content.entityTypes 每项 id、显示名与数量有效，且与数据库类型统计完全一致
+每个非空 image_path 位于数据包内且对应文件存在；image_path 为 null 才允许使用产品占位图
 ```
 
 不要要求数据库级外键约束，因为参考文档没有保证该约束存在。
@@ -1821,6 +1829,10 @@ UnsafeArchiveEntry
 PackageTooLarge
 ImportCancelled
 ImageMissing
+NotPublishable
+QualityFailed
+MetadataMismatch
+InvalidEntityTypeCatalog
 JsonParseFailed
 Unknown
 ```
@@ -2429,7 +2441,7 @@ AI 必须遵守：
 
 ### 数据
 
-- [ ] 支持 schema 2；
+- [ ] 只支持发布级 schema 4；
 - [ ] 不支持的 schema 会拒绝；
 - [ ] SHA-256 校验；
 - [ ] `PRAGMA quick_check`；

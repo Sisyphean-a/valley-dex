@@ -1,0 +1,25 @@
+schema_version: 2
+goal: wiki-product-refactor
+status: active
+objective: "持续完成 wiki-product-refactor 路线图的全部条目，并以可复跑验证和功能验收交付。"
+start_point: "路线图已激活；安全网 S1 已写入测试夹具并通过 Android 测试源码编译，但尚无设备执行验证。"
+acceptance:
+  - "路线图全部条目达到完成状态，且依赖顺序没有被跳过。"
+  - "数据包、内容阅读、首页、目录、搜索、数据管理与个人数据连续性均具备可观察的真实验证。"
+  - "最终 Android 功能验收通过，并保留可复跑的构建、测试和设备证据。"
+  - "页面改造遵循 Android 原生、可读且统一的移动端视觉方案。"
+non_goals:
+  - "不联网、不开账号或云同步、不提交真实游戏数据资源。"
+  - "不以 mock、测试开关或伪造成功绕过真实导入、SQLite、Room 与界面路径。"
+budget:
+  kind: none
+  limit: null
+current_iteration: 6
+next_action: "全部路线图条目已完成；等待 goal 状态收口。"
+blocker_signature: null
+blocker_count: 0
+owner_stop:
+  status: none
+  reason: null
+  decision: null
+updated_at: "2026-07-18"

@@ -1,6 +1,6 @@
 # 星露谷离线图鉴
 
-完全离线的 Android 数据查询工具。它只读取用户导入的 schema 2 `.svdata` 数据包，不请求网络、不读取存档，也不修改内容数据库。
+完全离线的 Android 图鉴。它只读取用户导入的发布级 schema 4 `.svdata` 数据包，不请求网络、不读取存档，也不修改内容数据库。
 
 ## 构建
 
@@ -16,9 +16,14 @@
 
 ## 数据包
 
-可将个人生成的 `stardew-zh-cn.svdata` 放到 `app/src/main/assets/default-data/`，构建时会自动内置。该目录已忽略，真实游戏数据不会提交。
+手机中首次启动可直接选择 `.svdata` 或 ZIP 文件导入。应用只接受 `schemaVersion=4`、`publishable=true` 且质量通过的数据包；会校验 manifest、SHA-256、SQLite `quick_check`、build_meta/artifact_metadata、实体类型目录、实体数量与已声明图片。失败不会覆盖当前可用数据。
 
-手机中首次启动可直接选择 `.svdata` 或 ZIP 文件导入。应用会校验 manifest、SHA-256、schema、SQLite `quick_check`、元数据与实体数量；失败不会覆盖当前可用数据。
+若需要以工作区外的真实数据包执行设备验收，设置 `STARDEW_SVDATA` 后运行：
+
+```powershell
+$env:STARDEW_SVDATA = 'D:\path\to\stardew-zh-cn.svdata'
+.\gradlew.bat verifyRealV4Package
+```
 
 ## 版权与隐私
 

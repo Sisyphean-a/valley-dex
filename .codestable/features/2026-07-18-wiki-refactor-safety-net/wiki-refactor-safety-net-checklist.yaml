@@ -1,0 +1,66 @@
+feature: 2026-07-18-wiki-refactor-safety-net
+created: 2026-07-18
+
+steps:
+  - action: "S1 测试夹具骨架：按 design §2.1 契约建立 A/B 包、失败样本、显式生产对象图和场景装配"
+    exit_signal: "A/B 包满足 manifest、build_meta、SQLite/FTS、图片、关系和拼音契约；每个失败样本按当前调用路径准确断言，且唯一 VM store、内容库、内存 Room、偏好和内容目录均清理"
+    status: done
+  - action: "S2 包生命周期：验证导入、拒绝样本、活动包保留和 A→B→A 回滚读取"
+    exit_signal: "每类无效包均断言准确错误和旧活动包仍可查询；回滚后 A 的包 ID 与实体查询恢复"
+    status: done
+  - action: "S3 内容查询：验证类型、列表、详情、稳定 ID、拼音首字母和 FTS 搜索的正常与边界路径"
+    exit_signal: "每条内容查询能力至少有一个成功与一个边界测试，FTS 专用词和普通表的查询失败均被区分断言"
+    status: done
+  - action: "S4 UI 路径：只增加 home-category:<type>，验证 Bootstrap 无包、内容入口、列表到详情与搜索命中的语义导航"
+    exit_signal: "所有 Route VM 由同一 provider/store 创建并按固定顺序释放；测试以 tag 或用户可读条目节点到达目标状态，无包时使用无默认包的 androidTest APK context，只验证选择按钮可达且不驱动系统文件选择器"
+    status: done
+  - action: "S5 个人连续性：验证收藏/历史的缺失清理、笔记持久化和搜索历史的独立连续性"
+    exit_signal: "保留 ID 的记录跨 A/B 可读；缺失收藏/历史可删除；笔记和搜索历史按现有接口读写正确"
+    status: done
+  - action: "S6 基线治理：消除自动测试对本地真实数据包的隐式依赖并记录命令结果"
+    exit_signal: "缺少本地默认 .svdata 时测试不跳过、不误报成功，设备条件明确可复现"
+    status: done
+
+checks:
+  - item: "合成测试包只替代受版权约束的外部资源，不替代导入、校验、SQLite 或 Room 核心逻辑"
+    source: "design §2.1 名词契约"
+    status: done
+  - item: "失败导入不替换当前活动包，且错误以 AppError 分类断言"
+    source: "design §2.2 编排骨架"
+    status: done
+  - item: "测试临时状态在每个 case 后清理，且不以任意延时掩盖异步竞争"
+    source: "design §2.2 流程级约束"
+    status: done
+  - item: "测试入口使用显式生产对象图和首页不可见 test tag，不新增生产运行时能力"
+    source: "design §2.3 挂载点"
+    status: done
+  - item: "测试不依赖真实游戏资源，不锁死 raw type、内部 ID、数字标题或图占位"
+    source: "design §1 范围守护"
+    status: done
+  - item: "有效导入、拒绝保留、浏览搜索、个人连续性和无包 UI 均有可观察证据"
+    source: "design §3 验收场景"
+    status: done
+
+dod:
+  commands:
+    - id: CMD-001
+      command: ".\\gradlew.bat testDebugUnitTest"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-002
+      command: ".\\gradlew.bat connectedDebugAndroidTest"
+      core: true
+      failure_handling: fix-or-block
+    - id: CMD-003
+      command: ".\\gradlew.bat lintDebug"
+      core: false
+      failure_handling: document-baseline
+    - id: CMD-004
+      command: ".\\gradlew.bat assembleDebug"
+      core: false
+      failure_handling: fix-or-block
+  evidence_required: [command_output, diff_summary, instrumentation_report]
+  cleanliness:
+    debug_output: forbidden
+    temporary_todo: forbidden
+    commented_out_code: forbidden

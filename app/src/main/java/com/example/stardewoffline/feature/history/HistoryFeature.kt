@@ -24,8 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -33,11 +33,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.database.user.HistoryEntity
-import com.example.stardewoffline.core.model.EntitySummary
-import com.example.stardewoffline.data.ContentRepository
+import com.example.stardewoffline.core.model.WikiEntry
 import com.example.stardewoffline.data.UserDataRepository
+import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -46,24 +45,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class HistoryRow(val record: HistoryEntity, val summary: EntitySummary?)
+data class HistoryRow(val record: HistoryEntity, val entry: WikiEntry?)
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val user: UserDataRepository,
-    private val content: ContentRepository,
+    private val catalogue: WikiCatalogue,
 ) : ViewModel() {
     private val mutableRows = MutableStateFlow<List<HistoryRow>>(emptyList())
-    private val mutableRoot = MutableStateFlow<File?>(null)
     val rows = mutableRows.asStateFlow()
-    val root = mutableRoot.asStateFlow()
 
     init {
         viewModelScope.launch {
-            mutableRoot.value = content.packageRoot()
             user.history().collect { records ->
-                val entities = content.summaries(records.map(HistoryEntity::entityId)).getOrNull().orEmpty()
-                mutableRows.value = records.map { HistoryRow(it, entities[it.entityId]) }
+                mutableRows.value = records.map { HistoryRow(it, catalogue.entry(it.entityId).getOrNull()) }
             }
         }
     }
@@ -75,14 +70,12 @@ class HistoryViewModel @Inject constructor(
 @Composable
 fun HistoryRoute(onBack: () -> Unit, onDetail: (String) -> Unit, viewModel: HistoryViewModel = hiltViewModel()) {
     val rows by viewModel.rows.collectAsState()
-    val root by viewModel.root.collectAsState()
-    HistoryScreen(rows, root, onBack, onDetail, viewModel::delete, viewModel::clear)
+    HistoryScreen(rows, onBack, onDetail, viewModel::delete, viewModel::clear)
 }
 
 @Composable
 private fun HistoryScreen(
     rows: List<HistoryRow>,
-    root: File?,
     onBack: () -> Unit,
     onDetail: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -91,7 +84,7 @@ private fun HistoryScreen(
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     Scaffold(topBar = { HistoryTopBar(onBack, rows.isNotEmpty()) { confirmClear = true } }) { padding ->
         if (rows.isEmpty()) EmptyHistory(Modifier.padding(padding)) else LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
-            items(rows, key = { it.record.entityId }) { row -> HistoryItem(row, root, onDetail, onDelete) }
+            items(rows, key = { it.record.entityId }) { row -> HistoryItem(row, onDetail, onDelete) }
         }
     }
     if (confirmClear) ClearDialog(onClear) { confirmClear = false }
@@ -108,15 +101,15 @@ private fun HistoryTopBar(onBack: () -> Unit, canClear: Boolean, onClear: () -> 
 }
 
 @Composable
-private fun HistoryItem(row: HistoryRow, root: File?, onDetail: (String) -> Unit, onDelete: (String) -> Unit) {
-    val name = row.summary?.nameZh ?: "当前数据包中已不存在"
+private fun HistoryItem(row: HistoryRow, onDetail: (String) -> Unit, onDelete: (String) -> Unit) {
+    val entry = row.entry
     Column(
-        Modifier.fillMaxWidth().clickable(enabled = row.summary != null) { onDetail(row.record.entityId) }.padding(16.dp),
+        Modifier.fillMaxWidth().clickable(enabled = entry != null) { if (entry != null) onDetail(entry.id) }.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(name, style = MaterialTheme.typography.titleMedium)
+        Text(entry?.title ?: "当前数据包中已不存在", style = MaterialTheme.typography.titleMedium)
         Text("${displayTime(row.record.lastViewedAt)} · 浏览 ${row.record.viewCount} 次", style = MaterialTheme.typography.bodySmall)
-        if (row.summary == null) Text(row.record.entityId, style = MaterialTheme.typography.labelSmall)
+        entry?.categoryLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
         IconButton(onClick = { onDelete(row.record.entityId) }) { Icon(Icons.Filled.Delete, "删除历史记录") }
     }
 }

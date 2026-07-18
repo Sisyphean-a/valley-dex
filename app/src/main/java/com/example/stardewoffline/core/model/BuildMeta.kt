@@ -8,4 +8,5 @@ data class BuildMeta(
     val entityCount: Int,
     val gameVersion: String,
     val sourceHash: String,
+    val artifactMetadata: ArtifactMetadata,
 )

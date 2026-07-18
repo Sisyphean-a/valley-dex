@@ -19,5 +19,4 @@ data class DetailRelationGroup(
 data class DetailPresentation(
     val facts: List<DetailFact>,
     val relationGroups: List<DetailRelationGroup>,
-    val rawJson: String,
 )

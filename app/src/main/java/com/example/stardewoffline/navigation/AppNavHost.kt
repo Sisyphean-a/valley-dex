@@ -51,9 +51,9 @@ fun AppNavHost() {
     val route = entry?.destination?.route
     Scaffold(bottomBar = { if (route in MAIN_DESTINATIONS.map(MainDestination::route)) BottomBar(route, nav::navigate) }) { padding ->
         NavHost(nav, "home", Modifier.padding(padding)) {
-            composable("home") { HomeRoute(onType = { nav.navigate("type/$it") }, onDetail = { nav.navigate(detailRoute(it)) }) }
+            composable("home") { HomeRoute(onCategory = { nav.navigate("catalogue/${Uri.encode(it)}") }, onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("search") { SearchRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
-            composable("type/{type}") { TypeListRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
+            composable("catalogue/{categoryId}") { TypeListRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("detail/{id}") { DetailRoute(onBack = nav::popBackStack, onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("favorites") { FavoritesRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("more") { MoreRoute(

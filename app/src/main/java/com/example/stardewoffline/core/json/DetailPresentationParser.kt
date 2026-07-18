@@ -21,29 +21,24 @@ import kotlinx.serialization.json.jsonPrimitive
 object DetailPresentationParser {
     fun present(entity: EntityDetail): DetailPresentation {
         val derived = entity.extraJson.objectAt("officialDerived")
-        val facts = factsFor(entity.entityType, entity.extraJson, derived)
-        val groups = groupsFor(entity.entityType, derived, entity.extraJson)
-        return DetailPresentation(facts, groups.filter { it.relations.isNotEmpty() }, entity.extraJson.toString())
+        val facts = factsFor(entity.entityType, derived)
+        val groups = groupsFor(entity.entityType, derived)
+        return DetailPresentation(facts, groups.filter { it.relations.isNotEmpty() })
     }
 
-    private fun factsFor(type: String, root: JsonObject, derived: JsonObject) = when (type) {
+    private fun factsFor(type: String, derived: JsonObject) = when (type) {
         "object", "mineral", "ring" -> itemFacts(derived)
         "crop" -> cropFacts(derived)
         "fish" -> fishFacts(derived)
         "villager" -> villagerFacts(derived)
-        "weapon", "tool", "footwear", "trinket" -> equipmentFacts(root)
-        "shop" -> shopFacts(root)
-        "drop" -> listOfNotNull(root.fact("chance", "概率") { DetailFormatters.chance(it.doubleOrNull ?: return@fact null) })
-        else -> genericFacts(derived, root)
+        else -> genericFacts(derived)
     }
 
-    private fun groupsFor(type: String, derived: JsonObject, root: JsonObject) = buildList {
+    private fun groupsFor(type: String, derived: JsonObject) = buildList {
         if (type == "crop") add(cropRelations(derived))
         if (type == "fish") add(fishRelations(derived))
         if (type == "villager") add(villagerRelations(derived))
         if (type in RECIPE_TYPES) add(recipeRelations(derived))
-        if (type == "drop") add(dropRelations(root))
-        if (type == "shop") add(shopItems(root))
         add(shopRelations(derived))
         add(machineRelations(derived))
         add(usedInRelations(derived))
@@ -52,7 +47,6 @@ object DetailPresentationParser {
     private fun itemFacts(derived: JsonObject) = listOfNotNull(
         derived.fact("sellPrice", "售价"),
         derived.fact("edibility", "食用值"),
-        derived.array("contextTags").takeIf { it.isNotEmpty() }?.let { DetailFact("技术标签", it.texts().joinToString("、")) },
     )
 
     private fun cropFacts(derived: JsonObject) = listOfNotNull(
@@ -68,7 +62,6 @@ object DetailPresentationParser {
 
     private fun fishFacts(derived: JsonObject) = listOfNotNull(
         derived.fact("difficulty", "难度"),
-        derived.fact("behavior", "行为代号"),
         sizeRange(derived),
         derived.array("seasons").takeIf { it.isNotEmpty() }?.let { DetailFact("季节", DetailFormatters.seasons(it.texts())) },
         derived.fact("weather", "天气"),
@@ -82,26 +75,9 @@ object DetailPresentationParser {
         derived.fact("canBeRomanced", "可婚配") { DetailFormatters.bool(it.booleanOrNull ?: return@fact null) },
     )
 
-    private fun equipmentFacts(root: JsonObject) = listOfNotNull(
-        valueRange(root, "MinDamage", "MaxDamage", "伤害"),
-        root.fact("Defense", "防御"), root.fact("Speed", "速度"), root.fact("CritChance", "暴击率"),
-        root.fact("SalePrice", "售价"), root.fact("AttachmentSlots", "附件槽"),
-        root.fact("CanBeLostOnDeath", "死亡时可丢失") { DetailFormatters.bool(it.booleanOrNull ?: return@fact null) },
-    )
-
-    private fun shopFacts(root: JsonObject) = listOfNotNull(
-        root.fact("Id", "商店 ID"), root.fact("Currency", "货币"), root.fact("PriceModifierMode", "价格修正规则"),
-        root.array("Owners").takeIf { it.isNotEmpty() }?.let { owners ->
-            DetailFact("所有者", owners.mapNotNull { it.jsonObject.string("Name") ?: it.jsonObject.string("Id") }.joinToString("、"))
-        },
-    )
-
-    private fun genericFacts(derived: JsonObject, root: JsonObject) = listOfNotNull(
+    private fun genericFacts(derived: JsonObject) = listOfNotNull(
         derived.fact("sellPrice", "售价"), derived.fact("edibility", "食用值"),
-        root.fact("Price", "售价"), root.fact("Requester", "委托人"), root.fact("Duration", "持续时间"),
-        root.fact("OrderType", "订单类型"), root.fact("Count", "目标数量"),
-        root.fact("Repeatable", "可重复") { DetailFormatters.bool(it.booleanOrNull ?: return@fact null) },
-    ).distinctBy(DetailFact::label)
+    )
 
     private fun cropRelations(derived: JsonObject) = DetailRelationGroup("种植与收获", listOfNotNull(
         derived.relation("seedItemId", "种子"), derived.relation("harvestItemId", "收获物"),
@@ -120,20 +96,7 @@ object DetailPresentationParser {
         addAll(listOfNotNull(derived.relation("outputItemId", "产物")))
     })
 
-    private fun dropRelations(root: JsonObject) = DetailRelationGroup("掉落关系", listOfNotNull(
-        root.relation("monsterId", "怪物"), root.relation("itemId", "物品"),
-    ))
-
     private fun shopRelations(derived: JsonObject) = DetailRelationGroup("商店来源", shopOffers(derived.array("shopOffers"), "商店"))
-
-    private fun shopItems(root: JsonObject) = DetailRelationGroup("商品列表", root.array("Items").map { element ->
-        val item = element.jsonObject
-        DetailRelation("商品", item.string("ItemId"), listOfNotNull(
-            item.fact("Price", "价格"), item.fact("TradeItemId", "交易物品"), item.fact("TradeItemAmount", "交易数量"),
-            item.fact("AvailableStock", "库存"),
-            DetailFormatters.condition(item.string("Condition"))?.let { DetailFact("条件", it) },
-        ))
-    })
 
     private fun machineRelations(derived: JsonObject) = DetailRelationGroup("机器用途", derived.array("machineUses").map(::machineRelation))
 

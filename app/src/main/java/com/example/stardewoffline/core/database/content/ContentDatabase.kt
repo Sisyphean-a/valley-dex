@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import com.example.stardewoffline.core.common.AppError
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.IoDispatcher
+import com.example.stardewoffline.core.model.ArtifactMetadata
 import com.example.stardewoffline.core.model.BuildMeta
 import com.example.stardewoffline.core.model.EntityDetail
 import com.example.stardewoffline.core.model.EntitySummary
@@ -17,6 +18,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.decodeFromString
 
 class ContentDatabase internal constructor(
     val packageRoot: File,
@@ -33,7 +35,7 @@ class ContentDatabase internal constructor(
         val values = buildMap {
             while (cursor.moveToNext()) put(cursor.getString(0), cursor.getString(1))
         }
-        val required = listOf("schema_version", "builder_version", "locale", "generated_at", "entity_count", "game_version", "source_hash")
+        val required = listOf("schema_version", "builder_version", "locale", "generated_at", "entity_count", "game_version", "source_hash", "artifact_metadata")
         val missing = required.filterNot(values::containsKey)
         if (missing.isNotEmpty()) return@query AppResult.Failure(AppError.DatabaseCorrupted("缺少元数据：${missing.joinToString()}"))
         AppResult.Success(
@@ -47,6 +49,8 @@ class ContentDatabase internal constructor(
                     ?: return@query AppResult.Failure(AppError.DatabaseCorrupted("entity_count 不是数字")),
                 gameVersion = values.getValue("game_version"),
                 sourceHash = values.getValue("source_hash"),
+                artifactMetadata = parseArtifactMetadata(values.getValue("artifact_metadata"))
+                    ?: return@query AppResult.Failure(AppError.DatabaseCorrupted("artifact_metadata 无效")),
             ),
         )
     }
@@ -134,6 +138,9 @@ class ContentDatabase internal constructor(
     }
 
     private fun readSummaries(cursor: Cursor) = buildList { while (cursor.moveToNext()) add(cursor.toSummary()) }
+    private fun parseArtifactMetadata(raw: String): ArtifactMetadata? = runCatching {
+        Json.Default.decodeFromString<ArtifactMetadata>(raw)
+    }.getOrNull()
     private fun Cursor.toSearchDocument() = SearchDocument(toSummary(), optional("pinyin"), optional("pinyin_initials"))
     private fun Cursor.toSummary() = EntitySummary(string("id"), string("entity_type"), string("name_zh"), optional("name_en"), optional("category"), optional("image_path"), optional("sort_key"))
     private fun Cursor.string(column: String) = getString(getColumnIndexOrThrow(column))

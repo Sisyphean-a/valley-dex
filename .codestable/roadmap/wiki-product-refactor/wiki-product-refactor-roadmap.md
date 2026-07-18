@@ -1,7 +1,7 @@
 ---
 doc_type: roadmap
 slug: wiki-product-refactor
-status: draft
+status: active
 created: 2026-07-18
 last_reviewed: 2026-07-18
 tags: [android, offline, wiki, product-refactor, data-package]

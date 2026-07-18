@@ -5,15 +5,15 @@ items:
   - slug: wiki-refactor-safety-net
     description: 为现有导入、首页、列表、详情、搜索和个人数据行为建立可重复的特征测试与已知失败样本
     depends_on: []
-    status: planned
-    feature: null
+    status: done
+    feature: 2026-07-18-wiki-refactor-safety-net
     minimal_loop: false
     notes: 不把当前错误 UI 当作目标验收；用于守住安全导入和用户数据连续性。
 
   - slug: schema4-package-contract
     description: 让导入链仅接受并字段级一致性校验发布级 schema 4 数据包，且失败不会替换当前活动包
     depends_on: [wiki-refactor-safety-net]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 按字段级矩阵和三类样本验收；同步更新过期 schema 2 需求和 README，真实成功包必须由显式验收入口提供。
@@ -21,7 +21,7 @@ items:
   - slug: encyclopedia-content-domain
     description: 建立语义目录和 WikiCatalogue，将合格包中的类型、摘要、关系和图片转换为统一图鉴展示模型
     depends_on: [schema4-package-contract]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 所有有数据的类型必须有可发现路径，并与 manifest.content.entityTypes 做覆盖核验。
@@ -29,7 +29,7 @@ items:
   - slug: wiki-entry-reading
     description: 重做详情阅读层，按类型呈现可读信息、关系卡片、图片缺失状态和未知字段的安全忽略
     depends_on: [encyclopedia-content-domain]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 不显示纯数字标题、内部 ID、extra_json 或未解析分隔串。
@@ -37,7 +37,7 @@ items:
   - slug: wiki-semantic-home
     description: 用首版固定目录重做首页，并完成首页分类到固定条目列表再到详情的真实数据闭环
     depends_on: [encyclopedia-content-domain, wiki-entry-reading]
-    status: planned
+    status: done
     feature: null
     minimal_loop: true
     notes: 本条不含网格或列表切换、分类内搜索和筛选；首页不得展示 typeCounts() 的原始类型。
@@ -45,7 +45,7 @@ items:
   - slug: wiki-catalogue-browsing
     description: 在最小分类页上增量提供可读卡片或列表切换、分类内搜索和已支持字段的筛选
     depends_on: [wiki-semantic-home]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 筛选器只能使用明确支持的结构化字段，不能暴露数据库列名或 JSON key。
@@ -53,7 +53,7 @@ items:
   - slug: wiki-search-experience
     description: 让全局搜索以统一图鉴阅读模型展示命中结果、分类限定和无结果状态
     depends_on: [wiki-catalogue-browsing, wiki-entry-reading]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 搜索命中不能退化成原始类型、技术 ID 或数据库字段列表。
@@ -61,7 +61,7 @@ items:
   - slug: package-lifecycle-continuity
     description: 将导入、版本、更新和拒绝原因收纳到数据管理页，并覆盖更新后的首页刷新
     depends_on: [schema4-package-contract, wiki-semantic-home]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 数据包管理不再作为首页主导航；错误需可读且保留技术诊断入口。
@@ -69,7 +69,7 @@ items:
   - slug: wiki-personal-continuity
     description: 让收藏、历史和笔记消费统一图鉴阅读模型并验证稳定 ID 的跨包连续性
     depends_on: [wiki-entry-reading, package-lifecycle-continuity]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 当前包不存在的实体必须可见且可清理，不能静默丢弃用户数据。
@@ -77,7 +77,7 @@ items:
   - slug: wiki-polish-and-device-acceptance
     description: 完成离线、空态、错误态、可访问性、性能回归和真实设备端到端验收，并归并产品与开发文档
     depends_on: [wiki-search-experience, wiki-personal-continuity]
-    status: planned
+    status: done
     feature: null
     minimal_loop: false
     notes: 没有真实 schema 4 合格包时不得将该条目标记为完成。

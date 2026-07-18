@@ -11,6 +11,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.stardewoffline.core.common.getOrNull
+import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.datapackage.PackageInstallStage
 import com.example.stardewoffline.core.model.DataPackageInfo
 import com.example.stardewoffline.data.DataPackageRepository
@@ -40,17 +41,17 @@ class DataManagementViewModel @Inject constructor(
 
     init { refresh() }
 
-    fun refresh() = viewModelScope.launch { updateInfo(packages.openActive().getOrNull()) }
+    fun refresh() = viewModelScope.launch { updateResult(packages.openActive(), null) }
 
     fun import(input: InputStream) = viewModelScope.launch {
         mutableState.value = mutableState.value.copy(busyMessage = PackageInstallStage.Copying.message, error = null)
         val result = packages.import(input) { stage -> mutableState.value = mutableState.value.copy(busyMessage = stage.message) }
-        updateInfo(result.getOrNull(), if (result.getOrNull() == null) "导入失败" else "已启用新数据包")
+        updateResult(result, "已启用新数据包")
     }
 
-    fun verify() = viewModelScope.launch { updateInfo(packages.verifyActive().getOrNull(), "验证当前数据") }
+    fun verify() = viewModelScope.launch { updateResult(packages.verifyActive(), "验证当前数据") }
 
-    fun rollback() = viewModelScope.launch { updateInfo(packages.rollback().getOrNull(), "已回滚到上一数据包") }
+    fun rollback() = viewModelScope.launch { updateResult(packages.rollback(), "已回滚到上一数据包") }
 
     fun deletePrevious() = viewModelScope.launch {
         val success = packages.deletePreviousPackage().getOrNull() != null
@@ -62,8 +63,11 @@ class DataManagementViewModel @Inject constructor(
         mutableState.value = mutableState.value.copy(message = "诊断信息已导出")
     }
 
-    private fun updateInfo(info: DataPackageInfo?, message: String? = null) {
-        mutableState.value = mutableState.value.copy(info = info, busyMessage = null, message = message, error = if (info == null) "无法读取当前数据包" else null)
+    private fun updateResult(result: AppResult<DataPackageInfo>, successMessage: String?) {
+        mutableState.value = when (result) {
+            is AppResult.Success -> mutableState.value.copy(info = result.value, busyMessage = null, message = successMessage, error = null)
+            is AppResult.Failure -> mutableState.value.copy(busyMessage = null, message = null, error = result.error.message)
+        }
     }
 }
 
@@ -77,7 +81,15 @@ fun DataManagementRoute(onBack: () -> Unit, viewModel: DataManagementViewModel =
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { context.contentResolver.openOutputStream(it)?.let(viewModel::exportDiagnostic) }
     }
-    DataManagementScreen(state, onBack, onImport = { importer.launch(MIME_TYPES) }, onVerify = viewModel::verify, onRollback = viewModel::rollback, onDeletePrevious = viewModel::deletePrevious, onExport = { exporter.launch("stardew-offline-diagnostic.json") })
+    DataManagementScreen(
+        state = state,
+        onBack = onBack,
+        onImport = { importer.launch(MIME_TYPES) },
+        onVerify = viewModel::verify,
+        onRollback = viewModel::rollback,
+        onDeletePrevious = viewModel::deletePrevious,
+        onExport = { exporter.launch("stardew-offline-diagnostic.json") },
+    )
 }
 
 private fun diagnosticJson(info: DataPackageInfo?): String = buildJsonObject {

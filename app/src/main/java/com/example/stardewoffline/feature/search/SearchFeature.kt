@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,19 +15,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.input.ImeAction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stardewoffline.core.common.AppResult
+import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.database.user.RecentSearchEntity
-import com.example.stardewoffline.core.model.SearchResult
-import com.example.stardewoffline.core.ui.component.EntityListItem
+import com.example.stardewoffline.core.datastore.AppPreferencesRepository
+import com.example.stardewoffline.core.model.WikiEntry
+import com.example.stardewoffline.core.model.WikiEntrySummary
+import com.example.stardewoffline.core.ui.component.WikiEntryListItem
 import com.example.stardewoffline.data.ContentRepository
 import com.example.stardewoffline.data.SearchQueryNormalizer
-import com.example.stardewoffline.data.SearchRepository
 import com.example.stardewoffline.data.UserDataRepository
-import com.example.stardewoffline.core.datastore.AppPreferencesRepository
+import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
@@ -38,32 +40,43 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val search: SearchRepository,
+    private val catalogue: WikiCatalogue,
     private val content: ContentRepository,
     private val user: UserDataRepository,
     private val preferences: AppPreferencesRepository,
 ) : ViewModel() {
     private val mutableQuery = MutableStateFlow("")
-    private val mutableResults = MutableStateFlow<List<SearchResult>>(emptyList())
+    private val mutableResults = MutableStateFlow<List<com.example.stardewoffline.core.model.WikiSearchHit>>(emptyList())
     private val mutableError = MutableStateFlow<String?>(null)
     private val mutableSelectedTypes = MutableStateFlow<Set<String>>(emptySet())
+    private val mutableRecentViewed = MutableStateFlow<List<WikiEntrySummary>>(emptyList())
     private val mutableRoot = MutableStateFlow<File?>(null)
     val query = mutableQuery.asStateFlow()
     val results = mutableResults.asStateFlow()
     val error = mutableError.asStateFlow()
     val selectedTypes = mutableSelectedTypes.asStateFlow()
+    val recentViewed = mutableRecentViewed.asStateFlow()
     val root = mutableRoot.asStateFlow()
     val recent = user.recentSearches()
     private var searchJob: Job? = null
 
-    init { viewModelScope.launch { mutableRoot.value = content.packageRoot() } }
+    init {
+        viewModelScope.launch { mutableRoot.value = content.packageRoot() }
+        viewModelScope.launch {
+            user.history().collect { history ->
+                mutableRecentViewed.value = history.take(5).mapNotNull {
+                    catalogue.entry(it.entityId).getOrNull()?.toSummary()
+                }
+            }
+        }
+    }
 
     fun updateQuery(value: String) {
         mutableQuery.value = value
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(150)
-            when (val response = search.search(value)) {
+            when (val response = catalogue.search(com.example.stardewoffline.core.model.WikiSearchQuery(value))) {
                 is AppResult.Success -> {
                     mutableResults.value = response.value
                     mutableError.value = null
@@ -86,6 +99,15 @@ class SearchViewModel @Inject constructor(
     fun toggleType(value: String) {
         mutableSelectedTypes.value = mutableSelectedTypes.value.toMutableSet().apply { if (!add(value)) remove(value) }
     }
+
+    private fun WikiEntry.toSummary() = WikiEntrySummary(
+        id = id,
+        title = title,
+        englishTitle = englishTitle,
+        categoryLabel = categoryLabel,
+        filterCategory = null,
+        image = image,
+    )
 }
 
 @Composable
@@ -95,16 +117,31 @@ fun SearchRoute(onDetail: (String) -> Unit, viewModel: SearchViewModel = hiltVie
     val error by viewModel.error.collectAsState()
     val selectedTypes by viewModel.selectedTypes.collectAsState()
     val recent by viewModel.recent.collectAsState(emptyList())
+    val recentViewed by viewModel.recentViewed.collectAsState()
     val root by viewModel.root.collectAsState()
-    SearchScreen(query, results, error, recent, selectedTypes, root, viewModel::updateQuery, viewModel::submitSearch, viewModel::selectRecent, viewModel::toggleType, onDetail)
+    SearchScreen(
+        query = query,
+        results = results,
+        error = error,
+        recent = recent,
+        recentViewed = recentViewed,
+        selectedTypes = selectedTypes,
+        root = root,
+        onQuery = viewModel::updateQuery,
+        onSubmit = viewModel::submitSearch,
+        onRecent = viewModel::selectRecent,
+        onType = viewModel::toggleType,
+        onDetail = onDetail,
+    )
 }
 
 @Composable
 private fun SearchScreen(
     query: String,
-    results: List<SearchResult>,
+    results: List<com.example.stardewoffline.core.model.WikiSearchHit>,
     error: String?,
     recent: List<RecentSearchEntity>,
+    recentViewed: List<WikiEntrySummary>,
     selectedTypes: Set<String>,
     root: File?,
     onQuery: (String) -> Unit,
@@ -113,8 +150,8 @@ private fun SearchScreen(
     onType: (String) -> Unit,
     onDetail: (String) -> Unit,
 ) {
-    val types = results.map { it.summary.entityType }.distinct()
-    val visible = results.filter { selectedTypes.isEmpty() || it.summary.entityType in selectedTypes }
+    val facets = results.associate { it.entityTypeId to it.entry.categoryLabel }
+    val visible = results.filter { selectedTypes.isEmpty() || it.entityTypeId in selectedTypes }
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             OutlinedTextField(
@@ -123,15 +160,34 @@ private fun SearchScreen(
                 modifier = Modifier.padding(16.dp),
                 label = { Text("搜索中文、英文、拼音或别名") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
             )
         }
-        item { types.forEach { FilterChip(selected = it in selectedTypes, onClick = { onType(it) }, label = { Text(it) }) } }
+        item { facets.forEach { (id, label) -> FilterChip(selected = id in selectedTypes, onClick = { onType(id) }, label = { Text(label) }) } }
         error?.let { message -> item { Text(message, modifier = Modifier.padding(horizontal = 16.dp)) } }
-        if (query.isBlank()) items(recent, key = { it.normalizedQuery }) { SearchHistoryItem(it, onRecent) }
-        items(visible, key = { it.summary.id }) { result -> EntityListItem(result.summary, root, result.reason) { onDetail(result.summary.id) } }
+        if (query.isBlank() && recentViewed.isNotEmpty()) {
+            item { SearchSectionTitle("最近浏览") }
+            items(recentViewed, key = WikiEntrySummary::id) { entry ->
+                WikiEntryListItem(entry, root, onClick = { onDetail(entry.id) })
+            }
+        }
+        if (query.isBlank() && recent.isNotEmpty()) {
+            item { SearchSectionTitle("最近搜索") }
+            items(recent, key = { it.normalizedQuery }) { SearchHistoryItem(it, onRecent) }
+        }
+        if (query.isNotBlank() && visible.isEmpty() && error == null) item { Text("没有找到匹配条目", modifier = Modifier.padding(16.dp)) }
+        items(visible, key = { it.entry.id }) { hit -> WikiEntryListItem(hit.entry, root, onClick = { onDetail(hit.entry.id) }) }
     }
+}
+
+@Composable
+private fun SearchSectionTitle(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
 }
 
 @Composable
