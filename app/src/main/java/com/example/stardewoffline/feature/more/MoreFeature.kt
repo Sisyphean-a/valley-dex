@@ -10,7 +10,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +33,7 @@ fun MoreRoute(
         MoreItem("数据管理", Icons.Filled.Storage, onDataManagement)
         MoreItem("设置", Icons.Filled.Settings, onSettings)
         MoreItem("关于", Icons.Filled.Info, onAbout)
-        MoreItem("开源许可", Icons.Filled.TextSnippet, onLicenses)
+        MoreItem("开源许可", Icons.AutoMirrored.Filled.TextSnippet, onLicenses)
     }
 }
 

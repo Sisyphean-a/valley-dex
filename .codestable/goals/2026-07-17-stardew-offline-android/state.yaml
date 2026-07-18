@@ -14,8 +14,8 @@ non_goals:
 budget:
   kind: owner-defined
   limit: "连续实现至完整交付"
-current_iteration: 7
-next_action: "补齐仪器测试、基准配置、最终构建与设备验收。"
+current_iteration: 8
+next_action: "执行最终 Debug/Release 构建、真实数据包与设备可用性验收。"
 blocker_signature: null
 blocker_count: 0
 owner_stop: null
