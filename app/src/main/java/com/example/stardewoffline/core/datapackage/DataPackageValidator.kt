@@ -46,9 +46,14 @@ class DataPackageValidator @Inject constructor(
         databaseFile: File,
         manifest: DataManifest,
     ): AppResult<DataPackageInfo> {
-        val databaseResult = databaseFactory.open(root, databaseFile)
+        val validationCopy = File.createTempFile("stardew-validation-", ".db")
+        databaseFile.copyTo(validationCopy, overwrite = true)
+        val databaseResult = databaseFactory.openForValidation(root, validationCopy)
         val database = databaseResult.getOrNull()
-            ?: return AppResult.Failure(databaseResult.failureOrNull() ?: AppError.DatabaseOpenFailed("只读打开失败"))
+            ?: run {
+                validationCopy.delete()
+                return AppResult.Failure(databaseResult.failureOrNull() ?: AppError.DatabaseOpenFailed("校验打开失败"))
+            }
         return try {
             database.quickCheck().failureOrNull()?.let { return AppResult.Failure(it) }
             val meta = database.getBuildMeta().getOrNull()
@@ -74,6 +79,7 @@ class DataPackageValidator @Inject constructor(
             AppResult.Success(DataPackageInfo(manifest.database.sha256, manifest, meta, missingImages))
         } finally {
             database.close()
+            validationCopy.delete()
         }
     }
 

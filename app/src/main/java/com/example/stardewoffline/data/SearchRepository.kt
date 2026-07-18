@@ -15,9 +15,20 @@ class SearchRepository @Inject constructor(private val databases: ContentDatabas
         val query = SearchQueryNormalizer.normalize(raw) ?: return AppResult.Success(emptyList())
         val open = databases.openActive()
         val database = open.getOrNull() ?: return AppResult.Failure((open as? AppResult.Failure)?.error ?: AppError.NoDataPackage)
-        val prefix = database.searchPrefix(query, LIMIT).getOrNull() ?: return AppResult.Failure(AppError.DatabaseQueryFailed("搜索失败"))
-        val aliases = database.searchAliases(query.normalized, LIMIT).getOrNull().orEmpty()
-        val fts = query.ftsQuery?.let { database.searchFts(it, LIMIT).getOrNull().orEmpty() }.orEmpty()
+        val prefix = when (val result = database.searchPrefix(query, LIMIT)) {
+            is AppResult.Success -> result.value
+            is AppResult.Failure -> return result
+        }
+        val aliases = when (val result = database.searchAliases(query.normalized, LIMIT)) {
+            is AppResult.Success -> result.value
+            is AppResult.Failure -> return result
+        }
+        val fts = query.ftsQuery?.let { ftsQuery ->
+            when (val result = database.searchFts(ftsQuery, LIMIT)) {
+                is AppResult.Success -> result.value
+                is AppResult.Failure -> return result
+            }
+        }.orEmpty()
         return AppResult.Success(score(prefix, aliases, fts, query.normalized))
     }
 

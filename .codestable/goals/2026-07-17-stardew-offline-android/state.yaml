@@ -1,6 +1,6 @@
 schema_version: 1
 goal: stardew-offline-android
-status: active
+status: complete
 objective: "从零交付可安装、完全离线且使用真实 .svdata 的星露谷离线图鉴 Android 应用。"
 start_point: "工作区只有需求、真实 schema 2 数据包和数据库，没有 Android 工程。"
 acceptance:
@@ -14,8 +14,8 @@ non_goals:
 budget:
   kind: owner-defined
   limit: "连续实现至完整交付"
-current_iteration: 8
-next_action: "执行最终 Debug/Release 构建、真实数据包与设备可用性验收。"
+current_iteration: 9
+next_action: "目标已完成。"
 blocker_signature: null
 blocker_count: 0
 owner_stop: null

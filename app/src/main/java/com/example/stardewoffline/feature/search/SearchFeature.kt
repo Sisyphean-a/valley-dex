@@ -18,7 +18,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.stardewoffline.core.common.getOrNull
+import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.database.user.RecentSearchEntity
 import com.example.stardewoffline.core.model.SearchResult
 import com.example.stardewoffline.core.ui.component.EntityListItem
@@ -45,10 +45,12 @@ class SearchViewModel @Inject constructor(
 ) : ViewModel() {
     private val mutableQuery = MutableStateFlow("")
     private val mutableResults = MutableStateFlow<List<SearchResult>>(emptyList())
+    private val mutableError = MutableStateFlow<String?>(null)
     private val mutableSelectedTypes = MutableStateFlow<Set<String>>(emptySet())
     private val mutableRoot = MutableStateFlow<File?>(null)
     val query = mutableQuery.asStateFlow()
     val results = mutableResults.asStateFlow()
+    val error = mutableError.asStateFlow()
     val selectedTypes = mutableSelectedTypes.asStateFlow()
     val root = mutableRoot.asStateFlow()
     val recent = user.recentSearches()
@@ -59,7 +61,19 @@ class SearchViewModel @Inject constructor(
     fun updateQuery(value: String) {
         mutableQuery.value = value
         searchJob?.cancel()
-        searchJob = viewModelScope.launch { delay(150); mutableResults.value = search.search(value).getOrNull().orEmpty() }
+        searchJob = viewModelScope.launch {
+            delay(150)
+            when (val response = search.search(value)) {
+                is AppResult.Success -> {
+                    mutableResults.value = response.value
+                    mutableError.value = null
+                }
+                is AppResult.Failure -> {
+                    mutableResults.value = emptyList()
+                    mutableError.value = response.error.message
+                }
+            }
+        }
     }
 
     fun submitSearch() = viewModelScope.launch {
@@ -78,16 +92,18 @@ class SearchViewModel @Inject constructor(
 fun SearchRoute(onDetail: (String) -> Unit, viewModel: SearchViewModel = hiltViewModel()) {
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
+    val error by viewModel.error.collectAsState()
     val selectedTypes by viewModel.selectedTypes.collectAsState()
     val recent by viewModel.recent.collectAsState(emptyList())
     val root by viewModel.root.collectAsState()
-    SearchScreen(query, results, recent, selectedTypes, root, viewModel::updateQuery, viewModel::submitSearch, viewModel::selectRecent, viewModel::toggleType, onDetail)
+    SearchScreen(query, results, error, recent, selectedTypes, root, viewModel::updateQuery, viewModel::submitSearch, viewModel::selectRecent, viewModel::toggleType, onDetail)
 }
 
 @Composable
 private fun SearchScreen(
     query: String,
     results: List<SearchResult>,
+    error: String?,
     recent: List<RecentSearchEntity>,
     selectedTypes: Set<String>,
     root: File?,
@@ -112,6 +128,7 @@ private fun SearchScreen(
             )
         }
         item { types.forEach { FilterChip(selected = it in selectedTypes, onClick = { onType(it) }, label = { Text(it) }) } }
+        error?.let { message -> item { Text(message, modifier = Modifier.padding(horizontal = 16.dp)) } }
         if (query.isBlank()) items(recent, key = { it.normalizedQuery }) { SearchHistoryItem(it, onRecent) }
         items(visible, key = { it.summary.id }) { result -> EntityListItem(result.summary, root, result.reason) { onDetail(result.summary.id) } }
     }

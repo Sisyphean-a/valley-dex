@@ -108,7 +108,7 @@ class ContentDatabase internal constructor(
 
     suspend fun searchPrefix(query: SearchQuery, limit: Int): AppResult<List<SearchDocument>> {
         val like = "${query.normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")}%"
-        return query(SEARCH_PREFIX, arrayOf(like, like, like, like, limit.toString())) { cursor ->
+        return query(SEARCH_PREFIX, arrayOf(like, like, like, like, like, limit.toString())) { cursor ->
             AppResult.Success(buildList { while (cursor.moveToNext()) add(cursor.toSearchDocument()) })
         }
     }
@@ -141,10 +141,12 @@ class ContentDatabase internal constructor(
     private fun String?.toTranslationStatus() = when (this) { "complete" -> TranslationStatus.COMPLETE; "missing" -> TranslationStatus.MISSING; "not_applicable" -> TranslationStatus.NOT_APPLICABLE; else -> TranslationStatus.UNKNOWN }
 
     private companion object {
-        const val SUMMARY_COLUMNS = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, s.pinyin AS sort_key FROM entities e LEFT JOIN entity_search s ON s.entity_id = e.id"
+        const val SUMMARY_SELECT = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, s.pinyin AS sort_key"
+        const val SUMMARY_FROM = " FROM entities e LEFT JOIN entity_search s ON s.entity_id = e.id"
+        const val SUMMARY_COLUMNS = "$SUMMARY_SELECT$SUMMARY_FROM"
         const val SUMMARY_BY_ID = "$SUMMARY_COLUMNS WHERE e.id = ? LIMIT 1"
         const val SUMMARIES_BY_TYPE = "$SUMMARY_COLUMNS WHERE e.entity_type = ? ORDER BY CASE WHEN s.pinyin IS NULL OR s.pinyin = '' THEN 1 ELSE 0 END, s.pinyin COLLATE NOCASE, e.name_zh COLLATE NOCASE"
-        const val SEARCH_PREFIX = "$SUMMARY_COLUMNS, s.pinyin, s.pinyin_initials FROM entities e LEFT JOIN entity_search s ON s.entity_id = e.id WHERE e.name_zh LIKE ? ESCAPE '\\' OR e.name_en LIKE ? ESCAPE '\\' COLLATE NOCASE OR s.pinyin LIKE ? ESCAPE '\\' OR s.pinyin_initials LIKE ? ESCAPE '\\' LIMIT ?"
+        const val SEARCH_PREFIX = "$SUMMARY_SELECT, s.pinyin, s.pinyin_initials$SUMMARY_FROM WHERE e.name_zh LIKE ? ESCAPE '\\' OR e.name_en LIKE ? ESCAPE '\\' COLLATE NOCASE OR s.pinyin LIKE ? ESCAPE '\\' OR REPLACE(s.pinyin, ' ', '') LIKE ? ESCAPE '\\' OR s.pinyin_initials LIKE ? ESCAPE '\\' LIMIT ?"
         const val SEARCH_ALIAS = "$SUMMARY_COLUMNS JOIN entity_aliases a ON a.entity_id = e.id WHERE a.alias = ? LIMIT ?"
         const val SEARCH_FTS = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, s.pinyin AS sort_key FROM entity_search s JOIN entities e ON e.id = s.entity_id WHERE entity_search MATCH ? LIMIT ?"
     }

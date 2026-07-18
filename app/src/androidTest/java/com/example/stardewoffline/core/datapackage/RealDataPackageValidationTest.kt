@@ -5,6 +5,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.HashUtils
 import com.example.stardewoffline.core.database.content.ContentDatabaseFactory
+import com.example.stardewoffline.core.model.SearchQuery
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -44,6 +45,13 @@ class RealDataPackageValidationTest {
             assertEquals(2, info.buildMeta.schemaVersion)
             assertEquals(3688, info.buildMeta.entityCount)
             assertEquals("zh-CN", info.buildMeta.locale)
+            val content = (ContentDatabaseFactory(Dispatchers.IO).open(extracted, File(extracted, "stardew.db")) as AppResult.Success).value
+            try {
+                val search = content.searchPrefix(SearchQuery("fangfengcao", "fangfengcao", listOf("fangfengcao"), null), 10)
+                assertTrue((search as AppResult.Success).value.any { it.summary.id == "object:24" })
+            } finally {
+                content.close()
+            }
             root.deleteRecursively()
         }
     }
