@@ -35,10 +35,10 @@ private fun qualifiedItem(value: String): String? {
     return "$type:${match.groupValues[2]}"
 }
 
-private val ITEM_REFERENCE = Regex("^\\((O|BC|F|T|TR|W)\\)(.+)$")
+private val ITEM_REFERENCE = Regex("^\\((O|BC|F|T|TR|W|B)\\)(.+)$")
 private val ITEM_TYPES = mapOf(
     "O" to "object", "BC" to "big_craftable", "F" to "furniture",
-    "T" to "tool", "TR" to "trinket", "W" to "weapon",
+    "T" to "tool", "TR" to "trinket", "W" to "weapon", "B" to "footwear",
 )
 private val NUMERIC_TYPES = listOf("object", "mineral", "ring", "crop", "fish", "weapon", "footwear")
 private val NAMED_TYPES = listOf("villager", "monster", "shop", "tool", "weapon", "cooking_recipe", "crafting_recipe")
