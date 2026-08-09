@@ -2,34 +2,45 @@ package com.example.stardewoffline.data
 
 import com.example.stardewoffline.core.common.AppError
 import com.example.stardewoffline.core.common.AppResult
+import com.example.stardewoffline.core.common.DefaultDispatcher
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.database.content.ContentDatabaseManager
+import com.example.stardewoffline.core.datapackage.DataPackageManager
 import com.example.stardewoffline.core.model.SearchDocument
 import com.example.stardewoffline.core.model.SearchResult
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Singleton
-class SearchRepository @Inject constructor(private val databases: ContentDatabaseManager) {
-    suspend fun search(raw: String): AppResult<List<SearchResult>> {
+class SearchRepository @Inject constructor(
+    private val packages: DataPackageManager,
+    private val databases: ContentDatabaseManager,
+    @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+) {
+    suspend fun search(raw: String, entityTypes: Set<String> = emptySet()): AppResult<List<SearchResult>> {
         val query = SearchQueryNormalizer.normalize(raw) ?: return AppResult.Success(emptyList())
-        val open = databases.openActive()
-        val database = open.getOrNull() ?: return AppResult.Failure((open as? AppResult.Failure)?.error ?: AppError.NoDataPackage)
-        val prefix = when (val result = database.searchPrefix(query, LIMIT)) {
-            is AppResult.Success -> result.value
-            is AppResult.Failure -> return result
-        }
-        val aliases = when (val result = database.searchAliases(query.normalized, LIMIT)) {
-            is AppResult.Success -> result.value
-            is AppResult.Failure -> return result
-        }
-        val fts = query.ftsQuery?.let { ftsQuery ->
-            when (val result = database.searchFts(ftsQuery, LIMIT)) {
+        return packages.withActivePackage {
+            databases.useActive { database ->
+            val prefix = when (val result = database.searchPrefix(query, LIMIT, entityTypes)) {
                 is AppResult.Success -> result.value
-                is AppResult.Failure -> return result
+                is AppResult.Failure -> return@useActive result
             }
-        }.orEmpty()
-        return AppResult.Success(score(prefix, aliases, fts, query.normalized))
+            val aliases = when (val result = database.searchAliases(query.normalized, LIMIT, entityTypes)) {
+                is AppResult.Success -> result.value
+                is AppResult.Failure -> return@useActive result
+            }
+            val fts = query.ftsQuery?.let { ftsQuery ->
+                when (val result = database.searchFts(ftsQuery, LIMIT, entityTypes)) {
+                    is AppResult.Success -> result.value
+                    is AppResult.Failure -> return@useActive result
+                }
+            }.orEmpty()
+                withContext(defaultDispatcher) { AppResult.Success(score(prefix, aliases, fts, query.normalized)) }
+            }
+        }
     }
 
     private fun score(prefix: List<SearchDocument>, aliases: List<com.example.stardewoffline.core.model.EntitySummary>, fts: List<com.example.stardewoffline.core.model.EntitySummary>, query: String): List<SearchResult> {

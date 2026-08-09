@@ -53,12 +53,13 @@ class SyntheticDataPackageTest {
     @Test
     fun scenarioUsesTestAppStorageAndCleansIt() = runBlocking {
         val scenario = TestAppScenario.create(context)
+        val workspace = scenario.context.filesDir
         try {
             assertTrue(scenario.packageRepository.openActive() is AppResult.Failure)
         } finally {
             scenario.close()
         }
-        assertFalse(File(context.filesDir, "content").exists())
+        assertFalse(workspace.exists())
     }
 
     private suspend fun validate(archive: SyntheticDataPackage): AppResult<com.example.stardewoffline.core.model.DataPackageInfo> {

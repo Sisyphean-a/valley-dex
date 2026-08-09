@@ -65,14 +65,15 @@ class TestAppScenario private constructor(
                 validator,
                 preferences,
                 databases,
+                Dispatchers.IO,
             )
             val userDatabase = Room.inMemoryDatabaseBuilder(testContext, UserDatabase::class.java).build()
             return TestAppScenario(
                 context = testContext,
                 dataPackages = manager,
-                packageRepository = DataPackageRepository(testContext, manager),
-                contentRepository = ContentRepository(databases),
-                searchRepository = SearchRepository(databases),
+                packageRepository = DataPackageRepository(testContext, manager, Dispatchers.IO),
+                contentRepository = ContentRepository(manager, databases),
+                searchRepository = SearchRepository(manager, databases, Dispatchers.Default),
                 userRepository = UserDataRepository(userDatabase.userDataDao()),
                 preferences = preferences,
                 contentDatabases = databases,

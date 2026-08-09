@@ -3,6 +3,7 @@ package com.example.stardewoffline.data
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
+import java.io.File
 import com.example.stardewoffline.core.model.CatalogueQuery
 import com.example.stardewoffline.data.wiki.DefaultWikiCatalogue
 import com.example.stardewoffline.testsupport.SyntheticDataPackageFactory
@@ -57,6 +58,23 @@ class WikiCatalogueTest {
         try {
             val catalogue = catalogue(scenario)
             assertTrue(catalogue.entries(CatalogueQuery("unknown")) is AppResult.Failure)
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun failedVerificationInvalidatesCachedCatalogueEntries() = runBlocking {
+        val scenario = readyScenario()
+        try {
+            val catalogue = catalogue(scenario)
+            assertTrue(catalogue.entries(CatalogueQuery("farm")).getOrNull()?.entries?.isNotEmpty() == true)
+            val packageId = checkNotNull(scenario.preferences.current().activePackageId)
+            File(scenario.context.filesDir, "content/packages/$packageId/stardew.db").writeBytes(byteArrayOf(0))
+
+            assertTrue(scenario.dataPackages.verifyActive() is AppResult.Failure)
+            assertTrue(catalogue.entries(CatalogueQuery("farm")) is AppResult.Failure)
+            assertTrue(scenario.dataPackages.openActive() is AppResult.Failure)
         } finally {
             scenario.close()
         }

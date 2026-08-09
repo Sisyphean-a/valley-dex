@@ -10,7 +10,11 @@ import com.example.stardewoffline.testsupport.SyntheticPackageFailure
 import com.example.stardewoffline.testsupport.SyntheticPackageVariant
 import com.example.stardewoffline.testsupport.TestAppScenario
 import com.example.stardewoffline.testsupport.instrumentationTestContext
+import java.io.File
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -33,6 +37,60 @@ class DataPackageLifecycleTest {
             val rollback = scenario.dataPackages.rollback().getOrNull() ?: error("回滚失败")
             assertEquals(first.id, rollback.id)
             assertEquals("测试村民", scenario.contentRepository.detail("villager:Alice").getOrNull()?.nameZh)
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun nestedCoroutineReadReusesTheActivePackageLeaseWithoutDeadlocking() = runBlocking {
+        val scenario = TestAppScenario.create(context)
+        try {
+            import(scenario, SyntheticPackageVariant.A).getOrNull() ?: error("数据包未导入")
+            val result = withTimeout(5_000) {
+                scenario.dataPackages.withActivePackage {
+                    coroutineScope {
+                        async { scenario.contentRepository.summaries("villager") }.await()
+                    }
+                }
+            }
+            assertEquals(1, result.getOrNull()?.size)
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun verificationFailureFallsBackToThePreviousValidPackage() = runBlocking {
+        val scenario = TestAppScenario.create(context)
+        try {
+            val first = import(scenario, SyntheticPackageVariant.A).getOrNull() ?: error("A 包未导入")
+            val second = import(scenario, SyntheticPackageVariant.B).getOrNull() ?: error("B 包未导入")
+            File(scenario.context.filesDir, "content/packages/${second.id}/stardew.db").writeBytes(byteArrayOf(0))
+
+            assertTrue(scenario.dataPackages.verifyActive() is AppResult.Failure)
+            assertEquals(first.id, scenario.dataPackages.openActive().getOrNull()?.id)
+            assertEquals("测试村民", scenario.contentRepository.detail("villager:Alice").getOrNull()?.nameZh)
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun reimportingAPackageRestoresItsDamagedDirectory() = runBlocking {
+        val scenario = TestAppScenario.create(context)
+        try {
+            SyntheticDataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
+                val installed = scenario.dataPackages.installAndActivate(fixture.archive.inputStream()).getOrNull()
+                    ?: error("初次导入失败")
+                File(scenario.context.filesDir, "content/packages/${installed.id}/stardew.db").writeBytes(byteArrayOf(0))
+                assertTrue(scenario.dataPackages.verifyActive() is AppResult.Failure)
+
+                val restored = scenario.dataPackages.installAndActivate(fixture.archive.inputStream()).getOrNull()
+                    ?: error("重新导入失败")
+                assertEquals(installed.id, restored.id)
+                assertEquals("萝卜", scenario.contentRepository.detail("object:1").getOrNull()?.nameZh)
+            }
         } finally {
             scenario.close()
         }

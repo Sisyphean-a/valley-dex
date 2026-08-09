@@ -27,7 +27,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.database.user.FavoriteEntity
-import com.example.stardewoffline.core.model.WikiEntry
+import com.example.stardewoffline.core.datastore.AppPreferencesRepository
 import com.example.stardewoffline.core.model.WikiEntrySummary
 import com.example.stardewoffline.core.ui.component.WikiEntryListItem
 import com.example.stardewoffline.data.ContentRepository
@@ -38,15 +38,20 @@ import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-data class FavoriteRow(val record: FavoriteEntity, val entry: WikiEntry?)
+data class FavoriteRow(val record: FavoriteEntity, val entry: WikiEntrySummary?)
 
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
     private val user: UserDataRepository,
     private val catalogue: WikiCatalogue,
     private val content: ContentRepository,
+    private val preferences: AppPreferencesRepository,
 ) : ViewModel() {
     private val mutableRows = MutableStateFlow<List<FavoriteRow>>(emptyList())
     private val mutableRoot = MutableStateFlow<File?>(null)
@@ -55,9 +60,13 @@ class FavoritesViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            mutableRoot.value = content.packageRoot()
-            user.favorites().collect { favorites ->
-                mutableRows.value = favorites.map { FavoriteRow(it, catalogue.entry(it.entityId).getOrNull()) }
+            combine(
+                user.favorites(),
+                preferences.preferences.map { it.activePackageId }.distinctUntilChanged(),
+            ) { favorites, _ -> favorites }.collectLatest { favorites ->
+                mutableRoot.value = content.packageRoot()
+                val entries = catalogue.summaries(favorites.map(FavoriteEntity::entityId)).getOrNull().orEmpty()
+                mutableRows.value = favorites.map { FavoriteRow(it, entries[it.entityId]) }
             }
         }
     }
@@ -85,7 +94,7 @@ private fun FavoritesScreen(rows: List<FavoriteRow>, root: File?, onDetail: (Str
         item { OutlinedTextField(query, { query = it }, Modifier.padding(16.dp), label = { Text("筛选收藏") }, singleLine = true) }
         item { knownTypes.forEach { type -> FilterChip(type in types, { types = types.toMutableSet().apply { if (!add(type)) remove(type) } }, { Text(type) }) } }
         items(visible, key = { it.record.entityId }) { row ->
-            row.entry?.let { entry -> WikiEntryListItem(entry.toSummary(), root, onClick = { onDetail(entry.id) }) }
+            row.entry?.let { entry -> WikiEntryListItem(entry, root, onClick = { onDetail(entry.id) }) }
                 ?: MissingFavorite(row.record.entityId, onRemove)
         }
     }
@@ -98,12 +107,3 @@ private fun MissingFavorite(id: String, onRemove: (String) -> Unit) {
         IconButton(onClick = { onRemove(id) }) { Icon(Icons.Filled.Delete, "删除收藏") }
     }
 }
-
-private fun WikiEntry.toSummary() = WikiEntrySummary(
-    id = id,
-    title = title,
-    englishTitle = englishTitle,
-    categoryLabel = categoryLabel,
-    filterCategory = null,
-    image = image,
-)

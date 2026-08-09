@@ -11,11 +11,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun BootstrapRoute(
-    onReady: () -> Unit,
+    onReady: (String) -> Unit,
     viewModel: BootstrapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    LaunchedEffect(state) { if (state is BootstrapUiState.Ready) onReady() }
+    LaunchedEffect(Unit) { viewModel.initialize() }
+    LaunchedEffect(state) {
+        (state as? BootstrapUiState.Ready)?.let { ready -> onReady(ready.packageInfo.id) }
+    }
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { selected ->

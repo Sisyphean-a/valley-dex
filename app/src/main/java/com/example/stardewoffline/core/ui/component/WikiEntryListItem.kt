@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.stardewoffline.core.model.EntryImage
@@ -31,7 +33,7 @@ fun WikiEntryListItem(
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = "打开 ${entry.title}" }.clickable(role = Role.Button, onClick = onClick),
         shape = MaterialTheme.shapes.medium,
         tonalElevation = 1.dp,
     ) {
@@ -74,7 +76,7 @@ fun WikiEntryGridItem(
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().testTag("wiki-grid-card:${entry.id}"),
+        modifier = modifier.fillMaxWidth().testTag("wiki-grid-card:${entry.id}").semantics { contentDescription = "打开 ${entry.title}" },
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

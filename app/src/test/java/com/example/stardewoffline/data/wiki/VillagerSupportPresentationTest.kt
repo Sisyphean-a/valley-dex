@@ -103,6 +103,17 @@ class VillagerSupportPresentationTest {
     }
 
     @Test
+    fun nonStringLegacyFieldKeepsItsSlotAndDoesNotAbortVillagerPresentation() {
+        val support = VillagerSupportPresentationBuilder.build(
+            sourceId = "Abigail",
+            schedules = emptyList(),
+            gifts = listOf(entityWithExtra("villager_gift:Abigail", "villager_gift", "{\"legacyFields\":[\"Abigail\",{},\"unused\",\"category_fruits\",\"unused\",\"\",\"unused\",\"\",\"unused\",\"\"]}")),
+        )
+        assertTrue(support.gifts.getValue("最爱").isEmpty())
+        assertEquals("水果", support.gifts.getValue("喜欢").single().readableLabel)
+    }
+
+    @Test
     fun giftsKeepFiveGroupsAndReadableRanges() {
         val support = VillagerSupportPresentationBuilder.build(
             sourceId = "Abigail",

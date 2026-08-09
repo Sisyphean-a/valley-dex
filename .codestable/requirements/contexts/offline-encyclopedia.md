@@ -35,7 +35,7 @@ code-paths:
 - 当前主题目录只有活动包存在的用户可浏览类型才显示：`farm`（农场与物品）、`villagers`（村民）、`people`（世界与生物）和 `activities`（活动与配方）。`npc_schedule` 与 `villager_gift` 是村民支援记录，不在主题目录、全部分类或普通搜索结果中单独出现；它们由对应村民条目聚合为可展开子菜单。`all`（全部分类）按 manifest 的可读 `displayName` 列出其余有数据类型，普通界面不把原始 ID 当标题。
 - 列表使用轻量摘要；详情由 `DetailPresentationParser` 按实体类型读取已确认字段和 `officialDerived`。缺失字段不推断为 `false`、`0` 或永不发生；未知字段不强行解释，游戏条件只原样说明而不求值。
 - 关系解析集中在 `EntityRelationResolver`，先生成候选稳定 ID 再批量查询。无法唯一跳转时保留可读关系信息或显示明确未收录状态，不创建假实体、不向普通页面泄漏原始 ID。
-- 搜索先标准化输入，再合并中文/英文前缀、别名、拼音、首字母和 FTS 命中；按实体 ID 去重并保留最高分和命中原因。查询参数必须绑定，用户输入中的 LIKE/FTS 特殊字符不能改变查询语义。
+- 搜索先标准化输入，再合并中文/英文前缀、别名、拼音、首字母和 FTS 命中；按实体 ID 去重并保留最高分和命中原因。已选实体类型会下推到每种 SQLite 查询，页面保留当前包完整的类型筛选入口。查询参数必须绑定，用户输入中的 LIKE/FTS 特殊字符不能改变查询语义。
 - 图片只从活动包的 `image_path` 解析本地文件；路径越界或文件不存在时使用明确的本地占位，不联网、不现场裁切游戏图集。
 - 收藏、历史、笔记和搜索历史不写内容库。数据包更新后保留稳定 ID 记录；当前包不存在的收藏/历史仍可见并可删除，笔记和搜索历史的连续性不依赖当前实体存在。
 - 主导航是首页、搜索、收藏、更多；数据管理从“更多”进入。最近浏览显示在搜索页的空搜索状态，不再作为首页内容块。详情 ID 进入 Navigation 前必须 URI 编码。
@@ -44,7 +44,7 @@ code-paths:
 
 - `data/wiki/WikiCatalogue.kt`：目录配置、条目模型、搜索适配和关系降级。
 - `core/model/WikiCatalogueModels.kt`：图鉴分类、条目、关系目标和图片状态。
-- `core/database/content/ContentDatabase.kt`、`data/SearchRepository.kt`：摘要、别名、拼音和 FTS 查询及分层评分。
+- `core/database/content/ContentDatabase.kt`、`data/SearchRepository.kt`：摘要批量投影、实体类型筛选、别名、拼音和 FTS 查询及分层评分。
 - `core/json/DetailPresentationParser.kt`、`core/formatter/DetailFormatters.kt`：类型事实、条件和数值的可读表达。
 - `data/EntityRelationResolver.kt`：稳定 ID 候选与批量关系解析。
 - `core/database/user/UserDatabase.kt`、`UserDataDao.kt`、`data/UserDataRepository.kt`：本地个人记录和软引用。

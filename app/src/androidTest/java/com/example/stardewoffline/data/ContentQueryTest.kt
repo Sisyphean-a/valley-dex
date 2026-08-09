@@ -43,6 +43,24 @@ class ContentQueryTest {
     }
 
     @Test
+    fun batchSummariesDeduplicateIdsAndKeepMissingIdsAbsent() = runBlocking {
+        val scenario = TestAppScenario.create(context)
+        try {
+            install(scenario)
+            val ids = buildList {
+                repeat(1_000) { add("missing:$it") }
+                add("crop:1")
+                add("crop:1")
+                add("fish:1")
+            }
+            val summaries = scenario.contentRepository.summaries(ids).getOrNull() ?: error("批量摘要查询失败")
+            assertEquals(setOf("crop:1", "fish:1"), summaries.keys)
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
     fun searchesAcrossNamesAliasesPinyinAndFts() = runBlocking {
         val scenario = TestAppScenario.create(context)
         try {
@@ -51,6 +69,7 @@ class ContentQueryTest {
             assertContains(scenario.searchRepository.search("turn").getOrNull()?.map { it.summary.id }, "object:1")
             assertContains(scenario.searchRepository.search("根菜").getOrNull()?.map { it.summary.id }, "object:1")
             assertContains(scenario.searchRepository.search("lb").getOrNull()?.map { it.summary.id }, "object:1")
+            assertEquals(listOf("crop:1"), scenario.searchRepository.search("萝", setOf("crop")).getOrNull()?.map { it.summary.id })
             assertContains(scenario.searchRepository.search("水域专用词").getOrNull()?.map { it.summary.id }, "fish:1")
             assertEquals(emptyList<String>(), scenario.searchRepository.search(" ").getOrNull()?.map { it.summary.id })
             assertEquals(emptyList<String>(), scenario.searchRepository.search("不存在").getOrNull()?.map { it.summary.id })

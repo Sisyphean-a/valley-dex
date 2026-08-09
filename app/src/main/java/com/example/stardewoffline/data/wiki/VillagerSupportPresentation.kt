@@ -5,8 +5,8 @@ import com.example.stardewoffline.core.model.DetailFact
 import com.example.stardewoffline.core.model.EntityDetail
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Flow: retain support records in the package, select only records belonging to the villager,
@@ -128,9 +128,11 @@ object VillagerSupportPresentationBuilder {
             !value.contains("NEARBY_FLOWER", true) && value.matches(Regex("(?:\\([A-Z]+\\))?[-A-Za-z0-9_:.]+"))
 
     private fun JsonObject.legacyFields(): List<String> {
-        val values = (this["legacyFields"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty()
+        val values = (this["legacyFields"] as? JsonArray)
+            ?.map { (it as? JsonPrimitive)?.contentOrNull.orEmpty() }
+            .orEmpty()
         if (values.isNotEmpty()) return values
-        return (this["legacyValue"]?.jsonPrimitive?.contentOrNull ?: "").split('/').toList()
+        return ((this["legacyValue"] as? JsonPrimitive)?.contentOrNull ?: "").split('/').toList()
     }
 
     private data class ScheduleKeyContext(

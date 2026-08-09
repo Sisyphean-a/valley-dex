@@ -15,6 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -49,7 +51,7 @@ fun AppNavHost() {
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    Scaffold(bottomBar = { if (route in MAIN_DESTINATIONS.map(MainDestination::route)) BottomBar(route, nav::navigate) }) { padding ->
+    Scaffold(bottomBar = { if (route in MAIN_DESTINATIONS.map(MainDestination::route)) BottomBar(route) { navigateMainDestination(nav, it) } }) { padding ->
         NavHost(nav, "home", Modifier.padding(padding)) {
             composable("home") { HomeRoute(onCategory = { nav.navigate("catalogue/${Uri.encode(it)}") }, onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("search") { SearchRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
@@ -66,6 +68,14 @@ fun AppNavHost() {
             composable("about") { AboutRoute(nav::popBackStack) }
             composable("licenses") { LicensesRoute(nav::popBackStack) }
         }
+    }
+}
+
+private fun navigateMainDestination(nav: NavHostController, route: String) {
+    nav.navigate(route) {
+        launchSingleTop = true
+        restoreState = true
+        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
     }
 }
 

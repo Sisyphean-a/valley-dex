@@ -21,11 +21,7 @@ class UserDataRepository @Inject constructor(private val dao: UserDataDao) {
         if (favorite) dao.saveFavorite(FavoriteEntity(id, now)) else dao.deleteFavorite(id)
     }
 
-    suspend fun recordView(id: String, now: Long = System.currentTimeMillis()) {
-        val current = dao.historyItem(id)
-        dao.saveHistory(HistoryEntity(id, now, (current?.viewCount ?: 0) + 1))
-        dao.trimHistory()
-    }
+    suspend fun recordView(id: String, now: Long = System.currentTimeMillis()) = dao.recordHistoryView(id, now)
 
     suspend fun deleteHistory(id: String) = dao.deleteHistory(id)
 
@@ -36,10 +32,8 @@ class UserDataRepository @Inject constructor(private val dao: UserDataDao) {
         if (content.isBlank()) dao.deleteNote(id) else dao.saveNote(NoteEntity(id, content, now))
     }
 
-    suspend fun rememberSearch(normalized: String, display: String, now: Long = System.currentTimeMillis()) {
-        val current = dao.search(normalized)
-        dao.saveSearch(RecentSearchEntity(normalized, display, now, (current?.useCount ?: 0) + 1))
-    }
+    suspend fun rememberSearch(normalized: String, display: String, now: Long = System.currentTimeMillis()) =
+        dao.recordSearchUse(normalized, display, now)
 
     suspend fun deleteSearch(normalized: String) = dao.deleteSearch(normalized)
 

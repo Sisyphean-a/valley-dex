@@ -17,6 +17,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -85,6 +87,7 @@ private fun CategoryCard(category: WikiCategory, onCategory: (String) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .testTag("home-category:${category.id}")
+            .semantics { contentDescription = "打开分类 ${category.title}" }
             .clickable { onCategory(category.id) },
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

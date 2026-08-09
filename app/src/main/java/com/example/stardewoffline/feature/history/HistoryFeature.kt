@@ -33,7 +33,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.database.user.HistoryEntity
-import com.example.stardewoffline.core.model.WikiEntry
+import com.example.stardewoffline.core.datastore.AppPreferencesRepository
+import com.example.stardewoffline.core.model.WikiEntrySummary
 import com.example.stardewoffline.data.UserDataRepository
 import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,22 +44,31 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-data class HistoryRow(val record: HistoryEntity, val entry: WikiEntry?)
+data class HistoryRow(val record: HistoryEntity, val entry: WikiEntrySummary?)
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val user: UserDataRepository,
     private val catalogue: WikiCatalogue,
+    private val preferences: AppPreferencesRepository,
 ) : ViewModel() {
     private val mutableRows = MutableStateFlow<List<HistoryRow>>(emptyList())
     val rows = mutableRows.asStateFlow()
 
     init {
         viewModelScope.launch {
-            user.history().collect { records ->
-                mutableRows.value = records.map { HistoryRow(it, catalogue.entry(it.entityId).getOrNull()) }
+            combine(
+                user.history(),
+                preferences.preferences.map { it.activePackageId }.distinctUntilChanged(),
+            ) { records, _ -> records }.collectLatest { records ->
+                val entries = catalogue.summaries(records.map(HistoryEntity::entityId)).getOrNull().orEmpty()
+                mutableRows.value = records.map { HistoryRow(it, entries[it.entityId]) }
             }
         }
     }

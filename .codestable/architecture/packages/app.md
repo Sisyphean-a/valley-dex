@@ -27,7 +27,7 @@ code-paths:
 | 区域 | 责任 | 代表代码 |
 |---|---|---|
 | 启动与导航 | 单 Activity、Bootstrap 状态切换、主导航和 URI 编码详情路由 | `MainActivity.kt`、`navigation/StardewOfflineRoot.kt`、`navigation/AppNavHost.kt` |
-| 数据包 | 安全解压、schema 4 发布校验、临时校验副本、激活、回滚和清理 | `core/datapackage/SafeZipExtractor.kt`、`DataPackageValidator.kt`、`DataPackageManager.kt` |
+| 数据包 | 安全解压、schema 4 发布校验、暂存提交、激活、回滚和清理 | `core/datapackage/SafeZipExtractor.kt`、`DataPackageValidator.kt`、`DataPackageInstaller.kt`、`DataPackageManager.kt` |
 | 内容数据库 | 只读 SQLite、元数据、实体摘要/详情、类型、别名和 FTS 查询 | `core/database/content/ContentDatabaseFactory.kt`、`ContentDatabase.kt`、`ContentDatabaseManager.kt` |
 | 内容领域 | 仓储、搜索分层评分、关系候选批量解析和语义图鉴模型 | `data/ContentRepository.kt`、`data/SearchRepository.kt`、`data/EntityRelationResolver.kt`、`data/wiki/WikiCatalogue.kt` |
 | 详情表达 | 从 `officialDerived` 和已确认字段生成事实、关系和可读降级 | `core/json/DetailPresentationParser.kt`、`core/formatter/DetailFormatters.kt` |
@@ -37,8 +37,8 @@ code-paths:
 
 ## 当前不变量
 
-- 内容库通过 `ContentDatabaseFactory.open()` 以只读方式打开；`ContentDatabaseManager` 用锁保护当前句柄，切包前关闭旧库。
-- 内容库与 Room 用户库分离；用户记录不写入 `stardew.db`，内容更新不会自动删除稳定 ID 记录。
+- 内容库通过 `ContentDatabaseFactory.open()` 以只读方式打开；`DataPackageManager` 的活动包生命周期锁覆盖仓储查询和切包，`ContentDatabaseManager` 再独占当前句柄，切包前关闭旧库，因此读取不会落在目录替换的中间状态。
+- 内容库与 Room 用户库分离；用户记录不写入 `stardew.db`，内容更新不会自动删除稳定 ID 记录。`user.db` 当前为 v2，历史、最近搜索和收藏的排序查询有对应复合索引，v1 用户库经显式迁移保留数据。
 - `WikiCatalogue` 从活动包的 `entityTypes` 取得可读类型名；主题分类只显示当前包存在的类型，“全部分类”保证所有有数据类型可达。
 - 条目缺失图片时使用产品占位；图片路径必须在活动包根目录内。未知字段和无法解析关系不制造假实体。
 - 详情、搜索和个人记录均以稳定实体 ID 为键；详情路由使用 `Uri.encode`，不能把原始 ID 直接拼入路径。

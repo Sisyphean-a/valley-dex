@@ -3,6 +3,7 @@ package com.example.stardewoffline.feature.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.model.WikiEntry
 import com.example.stardewoffline.data.ContentRepository
@@ -11,6 +12,7 @@ import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -42,13 +44,24 @@ class DetailViewModel @Inject constructor(
 
     fun saveNote(value: String) = viewModelScope.launch { user.saveNote(id, value) }
 
+    /**
+     * Failure: any content or presentation exception becomes a visible error instead of leaving the detail page loading forever.
+     */
     private suspend fun load() {
-        val entry = catalogue.entry(id).getOrNull()
-        if (entry == null) {
-            mutableState.value = DetailUiState(error = "当前数据包中未找到此条目")
+        val result = try {
+            catalogue.entry(id)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (throwable: Throwable) {
+            mutableState.value = DetailUiState(error = "读取条目失败：${throwable.message ?: throwable::class.simpleName}")
             return
         }
-        mutableState.value = DetailUiState(entry = entry, packageRoot = content.packageRoot())
-        user.recordView(id)
+        when (result) {
+            is AppResult.Success -> {
+                mutableState.value = DetailUiState(entry = result.value, packageRoot = content.packageRoot())
+                user.recordView(id)
+            }
+            is AppResult.Failure -> mutableState.value = DetailUiState(error = result.error.message)
+        }
     }
 }

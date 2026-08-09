@@ -1,5 +1,6 @@
 package com.example.stardewoffline.di
 
+import com.example.stardewoffline.core.common.DefaultDispatcher
 import com.example.stardewoffline.core.common.HashUtils
 import com.example.stardewoffline.core.common.IoDispatcher
 import dagger.Module
@@ -17,6 +18,10 @@ object AppModule {
     @Provides
     @IoDispatcher
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
+
+    @Provides
+    @DefaultDispatcher
+    fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
 
     @Provides
     @Singleton

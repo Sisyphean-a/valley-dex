@@ -25,12 +25,17 @@ class DataPackageInstaller @Inject constructor(
     private val validator: DataPackageValidator,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) {
-    suspend fun install(
+    /**
+     * Flow: copy, extract, and validate outside the active-package directory.
+     * Guarantee: an invalid or interrupted import cannot alter a readable package.
+     */
+    internal suspend fun stage(
         input: InputStream,
         onStage: (PackageInstallStage) -> Unit = {},
-    ): AppResult<InstalledPackage> = withContext(ioDispatcher) {
+    ): AppResult<StagedPackage> = withContext(ioDispatcher) {
         val archive = File.createTempFile("stardew-import-", ".svdata", context.cacheDir)
         val staging = File(contentRoot(), "staging/${UUID.randomUUID()}")
+        var retained = false
         try {
             onStage(PackageInstallStage.Copying)
             copyInput(input, archive)
@@ -41,15 +46,63 @@ class DataPackageInstaller @Inject constructor(
             val info = validation.getOrNull() ?: return@withContext AppResult.Failure(
                 validation.failureOrNull() ?: AppError.Unknown("数据包校验失败"),
             )
-            onStage(PackageInstallStage.Preparing)
-            AppResult.Success(InstalledPackage(moveToPackages(staging, info.id), info))
+            retained = true
+            AppResult.Success(StagedPackage(staging, info))
         } catch (error: PackageLimitException) {
             AppResult.Failure(AppError.PackageTooLarge("压缩包超过 512 MiB"))
         } catch (error: Exception) {
             AppResult.Failure(AppError.Unknown(error.message ?: "导入失败"))
         } finally {
             archive.delete()
-            if (staging.exists()) staging.deleteRecursively()
+            if (!retained && staging.exists()) staging.deleteRecursively()
+        }
+    }
+
+    /**
+     * Flow: atomically replace an existing package only after staging validation has succeeded.
+     * Guarantee: retains the prior directory until the lifecycle manager has opened the replacement.
+     */
+    internal suspend fun commit(staged: StagedPackage): AppResult<InstalledPackage> = withContext(ioDispatcher) {
+        val destination = File(contentRoot(), "packages/${staged.info.id}")
+        val backup = File(contentRoot(), "staging/backup-${UUID.randomUUID()}")
+        try {
+            destination.parentFile?.mkdirs()
+            val backupRoot = backup.takeIf { destination.exists() }?.also { move(destination, it) }
+            try {
+                move(staged.root, destination)
+            } catch (error: Exception) {
+                if (destination.exists() && !destination.deleteRecursively()) throw error
+                if (backupRoot != null) move(backupRoot, destination)
+                throw error
+            }
+            AppResult.Success(InstalledPackage(destination, staged.info, backupRoot))
+        } catch (error: Exception) {
+            AppResult.Failure(AppError.Unknown(error.message ?: "无法提交数据包"))
+        }
+    }
+
+    internal suspend fun finalize(installed: InstalledPackage): AppResult<Unit> = withContext(ioDispatcher) {
+        val backup = installed.backupRoot ?: return@withContext AppResult.Success(Unit)
+        if (!backup.exists() || backup.deleteRecursively()) AppResult.Success(Unit)
+        else AppResult.Failure(AppError.Unknown("无法清理已替换数据包的备份"))
+    }
+
+    /** Failure: restores the pre-import directory when activation or cleanup cannot complete. */
+    internal suspend fun restore(installed: InstalledPackage): AppResult<Unit> = withContext(ioDispatcher) {
+        try {
+            if (installed.root.exists() && !installed.root.deleteRecursively()) {
+                return@withContext AppResult.Failure(AppError.Unknown("无法移除未启用的新数据包"))
+            }
+            installed.backupRoot?.takeIf(File::exists)?.let { move(it, installed.root) }
+            AppResult.Success(Unit)
+        } catch (error: Exception) {
+            AppResult.Failure(AppError.Unknown(error.message ?: "无法恢复原数据包"))
+        }
+    }
+
+    internal suspend fun discard(staged: StagedPackage) = withContext(ioDispatcher) {
+        if (staged.root.exists() && !staged.root.deleteRecursively()) {
+            throw IllegalStateException("无法清理导入临时目录")
         }
     }
 
@@ -69,14 +122,11 @@ class DataPackageInstaller @Inject constructor(
         }
     }
 
-    private fun moveToPackages(staging: File, packageId: String): File {
-        val destination = File(contentRoot(), "packages/$packageId")
+    private fun move(source: File, destination: File) {
         destination.parentFile?.mkdirs()
-        if (destination.isDirectory) return destination
-        runCatching { Files.move(staging.toPath(), destination.toPath(), ATOMIC_MOVE) }
-            .recoverCatching { Files.move(staging.toPath(), destination.toPath(), REPLACE_EXISTING) }
+        runCatching { Files.move(source.toPath(), destination.toPath(), ATOMIC_MOVE) }
+            .recoverCatching { Files.move(source.toPath(), destination.toPath(), REPLACE_EXISTING) }
             .getOrThrow()
-        return destination
     }
 
     private fun contentRoot(): File = File(context.filesDir, "content")
@@ -85,7 +135,12 @@ class DataPackageInstaller @Inject constructor(
     private class PackageLimitException : IllegalStateException()
 }
 
-data class InstalledPackage(val root: File, val info: DataPackageInfo)
+internal data class StagedPackage(val root: File, val info: DataPackageInfo)
+internal data class InstalledPackage(
+    val root: File,
+    val info: DataPackageInfo,
+    val backupRoot: File?,
+)
 
 enum class PackageInstallStage(val message: String) {
     Copying("正在复制数据包"),

@@ -95,6 +95,7 @@ class RouteNavigationTest {
                     saved = SavedStateHandle(mapOf("categoryId" to "type:crop")),
                     catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
                     content = scenario.contentRepository,
+                    preferences = scenario.preferences,
                 )
             }
             viewModel.setDisplayMode(CatalogueDisplayMode.Grid)
@@ -120,6 +121,7 @@ class RouteNavigationTest {
                     saved = SavedStateHandle(mapOf("categoryId" to "type:crop")),
                     catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
                     content = scenario.contentRepository,
+                    preferences = scenario.preferences,
                 )
             }
             setRoute { TypeListRoute(onDetail = { typeDetail = it }, viewModel = listViewModel) }

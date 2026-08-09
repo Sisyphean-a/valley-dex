@@ -1,9 +1,9 @@
 package com.example.stardewoffline.data
 
-import com.example.stardewoffline.core.common.AppError
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.database.content.ContentDatabaseManager
+import com.example.stardewoffline.core.datapackage.DataPackageManager
 import com.example.stardewoffline.core.model.EntityDetail
 import com.example.stardewoffline.core.model.EntitySummary
 import com.example.stardewoffline.core.model.EntityTypeCount
@@ -13,10 +13,12 @@ import javax.inject.Singleton
 
 @Singleton
 class ContentRepository @Inject constructor(
+    private val packages: DataPackageManager,
     private val databases: ContentDatabaseManager,
 ) {
     suspend fun typeCounts(): AppResult<List<EntityTypeCount>> = databaseResult { it.typeCounts() }
     suspend fun summaries(type: String): AppResult<List<EntitySummary>> = databaseResult { it.summariesByType(type) }
+    suspend fun summaries(types: Set<String>): AppResult<Map<String, List<EntitySummary>>> = databaseResult { it.summariesByTypes(types) }
     suspend fun details(type: String): AppResult<List<EntityDetail>> = databaseResult { it.detailsByType(type) }
     suspend fun detailsByIds(ids: List<String>): AppResult<List<EntityDetail>> =
         if (ids.isEmpty()) AppResult.Success(emptyList()) else databaseResult { it.detailsByIds(ids) }
@@ -26,11 +28,10 @@ class ContentRepository @Inject constructor(
     suspend fun detail(id: String): AppResult<EntityDetail?> = databaseResult { it.detail(id) }
     suspend fun aliases(id: String): AppResult<List<String>> = databaseResult { it.aliases(id) }
     suspend fun categories(type: String): AppResult<List<String>> = databaseResult { it.categories(type) }
-    suspend fun packageRoot(): File? = databases.openActive().getOrNull()?.packageRoot
+    suspend fun packageRoot(): File? = packages.withActivePackage {
+        databases.useActive { database -> AppResult.Success(database.packageRoot) }
+    }.getOrNull()
 
-    private suspend fun <T> databaseResult(action: suspend (com.example.stardewoffline.core.database.content.ContentDatabase) -> AppResult<T>): AppResult<T> {
-        val result = databases.openActive()
-        val database = result.getOrNull() ?: return AppResult.Failure((result as? AppResult.Failure)?.error ?: AppError.NoDataPackage)
-        return action(database)
-    }
+    private suspend fun <T> databaseResult(action: suspend (com.example.stardewoffline.core.database.content.ContentDatabase) -> AppResult<T>): AppResult<T> =
+        packages.withActivePackage { databases.useActive(action) }
 }

@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.common.AppResult
+import com.example.stardewoffline.core.common.IoDispatcher
 import com.example.stardewoffline.core.datapackage.PackageInstallStage
 import com.example.stardewoffline.core.model.DataPackageInfo
 import com.example.stardewoffline.data.DataPackageRepository
@@ -19,9 +20,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -35,6 +38,7 @@ data class DataManagementUiState(
 @HiltViewModel
 class DataManagementViewModel @Inject constructor(
     private val packages: DataPackageRepository,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(DataManagementUiState())
     val state = mutableState.asStateFlow()
@@ -59,14 +63,15 @@ class DataManagementViewModel @Inject constructor(
     }
 
     fun exportDiagnostic(output: OutputStream) = viewModelScope.launch {
-        output.writer().use { it.write(diagnosticJson(mutableState.value.info)) }
+        val diagnostics = diagnosticJson(mutableState.value.info)
+        withContext(ioDispatcher) { output.writer().use { it.write(diagnostics) } }
         mutableState.value = mutableState.value.copy(message = "诊断信息已导出")
     }
 
     private fun updateResult(result: AppResult<DataPackageInfo>, successMessage: String?) {
         mutableState.value = when (result) {
             is AppResult.Success -> mutableState.value.copy(info = result.value, busyMessage = null, message = successMessage, error = null)
-            is AppResult.Failure -> mutableState.value.copy(busyMessage = null, message = null, error = result.error.message)
+            is AppResult.Failure -> mutableState.value.copy(info = null, busyMessage = null, message = null, error = result.error.message)
         }
     }
 }

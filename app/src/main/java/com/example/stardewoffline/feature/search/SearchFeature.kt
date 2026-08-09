@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,6 +38,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 @HiltViewModel
@@ -49,44 +55,47 @@ class SearchViewModel @Inject constructor(
     private val mutableResults = MutableStateFlow<List<com.example.stardewoffline.core.model.WikiSearchHit>>(emptyList())
     private val mutableError = MutableStateFlow<String?>(null)
     private val mutableSelectedTypes = MutableStateFlow<Set<String>>(emptySet())
+    private val mutableFacets = MutableStateFlow<Map<String, String>>(emptyMap())
     private val mutableRecentViewed = MutableStateFlow<List<WikiEntrySummary>>(emptyList())
     private val mutableRoot = MutableStateFlow<File?>(null)
     val query = mutableQuery.asStateFlow()
     val results = mutableResults.asStateFlow()
     val error = mutableError.asStateFlow()
     val selectedTypes = mutableSelectedTypes.asStateFlow()
+    val facets = mutableFacets.asStateFlow()
     val recentViewed = mutableRecentViewed.asStateFlow()
     val root = mutableRoot.asStateFlow()
     val recent = user.recentSearches()
     private var searchJob: Job? = null
 
     init {
-        viewModelScope.launch { mutableRoot.value = content.packageRoot() }
+        val activePackageIds = preferences.preferences.map { it.activePackageId }.distinctUntilChanged()
         viewModelScope.launch {
-            user.history().collect { history ->
-                mutableRecentViewed.value = history.take(5).mapNotNull {
-                    catalogue.entry(it.entityId).getOrNull()?.toSummary()
-                }
+            combine(user.history(), activePackageIds) { history, _ -> history }.collectLatest { history ->
+                mutableRoot.value = content.packageRoot()
+                val summaries = catalogue.summaries(history.take(5).map { it.entityId }).getOrNull().orEmpty()
+                mutableRecentViewed.value = history.take(5).mapNotNull { summaries[it.entityId] }
+            }
+        }
+        viewModelScope.launch {
+            activePackageIds.collect {
+                mutableRoot.value = content.packageRoot()
+                mutableSelectedTypes.value = emptySet()
+                mutableResults.value = emptyList()
+                mutableError.value = null
+                mutableFacets.value = catalogue.sections().getOrNull()
+                    ?.firstOrNull { section -> section.id == "all" }
+                    ?.categories
+                    ?.associate { category -> category.entityTypes.single() to category.title }
+                    .orEmpty()
+                if (mutableQuery.value.isNotBlank()) search()
             }
         }
     }
 
     fun updateQuery(value: String) {
         mutableQuery.value = value
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            delay(150)
-            when (val response = catalogue.search(com.example.stardewoffline.core.model.WikiSearchQuery(value))) {
-                is AppResult.Success -> {
-                    mutableResults.value = response.value
-                    mutableError.value = null
-                }
-                is AppResult.Failure -> {
-                    mutableResults.value = emptyList()
-                    mutableError.value = response.error.message
-                }
-            }
-        }
+        search(DEBOUNCE_MS)
     }
 
     fun submitSearch() = viewModelScope.launch {
@@ -98,16 +107,33 @@ class SearchViewModel @Inject constructor(
 
     fun toggleType(value: String) {
         mutableSelectedTypes.value = mutableSelectedTypes.value.toMutableSet().apply { if (!add(value)) remove(value) }
+        search()
     }
 
-    private fun WikiEntry.toSummary() = WikiEntrySummary(
-        id = id,
-        title = title,
-        englishTitle = englishTitle,
-        categoryLabel = categoryLabel,
-        filterCategory = null,
-        image = image,
-    )
+    private fun search(delayMillis: Long = 0) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            if (delayMillis > 0) delay(delayMillis)
+            val requestedQuery = mutableQuery.value
+            val requestedTypes = mutableSelectedTypes.value
+            when (val response = catalogue.search(com.example.stardewoffline.core.model.WikiSearchQuery(requestedQuery, requestedTypes))) {
+                is AppResult.Success -> {
+                    if (mutableQuery.value == requestedQuery && mutableSelectedTypes.value == requestedTypes) {
+                        mutableResults.value = response.value
+                        mutableError.value = null
+                    }
+                }
+                is AppResult.Failure -> {
+                    if (mutableQuery.value == requestedQuery && mutableSelectedTypes.value == requestedTypes) {
+                        mutableResults.value = emptyList()
+                        mutableError.value = response.error.message
+                    }
+                }
+            }
+        }
+    }
+
+    private companion object { const val DEBOUNCE_MS = 250L }
 }
 
 @Composable
@@ -116,6 +142,7 @@ fun SearchRoute(onDetail: (String) -> Unit, viewModel: SearchViewModel = hiltVie
     val results by viewModel.results.collectAsState()
     val error by viewModel.error.collectAsState()
     val selectedTypes by viewModel.selectedTypes.collectAsState()
+    val facets by viewModel.facets.collectAsState()
     val recent by viewModel.recent.collectAsState(emptyList())
     val recentViewed by viewModel.recentViewed.collectAsState()
     val root by viewModel.root.collectAsState()
@@ -126,6 +153,7 @@ fun SearchRoute(onDetail: (String) -> Unit, viewModel: SearchViewModel = hiltVie
         recent = recent,
         recentViewed = recentViewed,
         selectedTypes = selectedTypes,
+        facets = facets,
         root = root,
         onQuery = viewModel::updateQuery,
         onSubmit = viewModel::submitSearch,
@@ -143,6 +171,7 @@ private fun SearchScreen(
     recent: List<RecentSearchEntity>,
     recentViewed: List<WikiEntrySummary>,
     selectedTypes: Set<String>,
+    facets: Map<String, String>,
     root: File?,
     onQuery: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -150,14 +179,13 @@ private fun SearchScreen(
     onType: (String) -> Unit,
     onDetail: (String) -> Unit,
 ) {
-    val facets = results.associate { it.entityTypeId to it.entry.categoryLabel }
-    val visible = results.filter { selectedTypes.isEmpty() || it.entityTypeId in selectedTypes }
+    val visible = results
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             OutlinedTextField(
                 value = query,
                 onValueChange = onQuery,
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(16.dp).semantics { contentDescription = SEARCH_FIELD_DESCRIPTION },
                 label = { Text("搜索中文、英文、拼音或别名") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
@@ -194,3 +222,5 @@ private fun SearchSectionTitle(title: String) {
 private fun SearchHistoryItem(item: RecentSearchEntity, onClick: (String) -> Unit) {
     FilterChip(selected = false, onClick = { onClick(item.displayQuery) }, label = { Text(item.displayQuery) }, modifier = Modifier.padding(horizontal = 16.dp))
 }
+
+private const val SEARCH_FIELD_DESCRIPTION = "图鉴搜索输入框"

@@ -20,10 +20,6 @@ class BootstrapViewModel @Inject constructor(
     private val mutableState = MutableStateFlow<BootstrapUiState>(BootstrapUiState.Loading)
     val state: StateFlow<BootstrapUiState> = mutableState.asStateFlow()
 
-    init {
-        initialize()
-    }
-
     fun initialize() = viewModelScope.launch {
         mutableState.value = BootstrapUiState.Loading
         when (val active = dataPackages.openActive()) {

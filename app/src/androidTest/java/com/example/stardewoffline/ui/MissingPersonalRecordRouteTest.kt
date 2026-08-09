@@ -46,6 +46,7 @@ class MissingPersonalRecordRouteTest {
                         scenario.userRepository,
                         catalogue(scenario),
                         scenario.contentRepository,
+                        scenario.preferences,
                     )
                 })),
             )[FavoritesViewModel::class.java]
@@ -66,7 +67,7 @@ class MissingPersonalRecordRouteTest {
             val viewModel = ViewModelProvider(
                 scenario.viewModels,
                 TestViewModelFactory(mapOf(HistoryViewModel::class.java to {
-                    HistoryViewModel(scenario.userRepository, catalogue(scenario))
+                    HistoryViewModel(scenario.userRepository, catalogue(scenario), scenario.preferences)
                 })),
             )[HistoryViewModel::class.java]
             setContent { HistoryRoute(onBack = {}, onDetail = {}, viewModel = viewModel) }

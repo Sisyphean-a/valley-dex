@@ -77,6 +77,19 @@ class ContentDatabase internal constructor(
         AppResult.Success(readSummaries(cursor))
     }
 
+    suspend fun summariesByTypes(types: Set<String>): AppResult<Map<String, List<EntitySummary>>> {
+        val sortedTypes = types.toList().sorted()
+        if (sortedTypes.isEmpty()) return AppResult.Success(emptyMap())
+        if (sortedTypes.size > MAX_BIND_PARAMETERS) return AppResult.Failure(AppError.DatabaseQueryFailed("分类实体类型过多"))
+        val placeholders = sortedTypes.joinToString(",") { "?" }
+        return query(
+            "$SUMMARY_COLUMNS WHERE e.entity_type IN ($placeholders) ORDER BY e.entity_type, CASE WHEN s.pinyin IS NULL OR s.pinyin = '' THEN 1 ELSE 0 END, s.pinyin COLLATE NOCASE, e.name_zh COLLATE NOCASE",
+            sortedTypes.toTypedArray(),
+        ) { cursor ->
+            AppResult.Success(readSummaries(cursor).groupBy(EntitySummary::entityType))
+        }
+    }
+
     suspend fun detailsByType(type: String): AppResult<List<EntityDetail>> = query(
         "SELECT * FROM entities WHERE entity_type = ? ORDER BY id COLLATE NOCASE",
         arrayOf(type),
@@ -124,11 +137,19 @@ class ContentDatabase internal constructor(
     }
 
     suspend fun summariesByIds(ids: List<String>): AppResult<Map<String, EntitySummary>> {
-        if (ids.isEmpty()) return AppResult.Success(emptyMap())
-        val placeholders = ids.joinToString(",") { "?" }
-        return query("$SUMMARY_COLUMNS WHERE e.id IN ($placeholders)", ids.toTypedArray()) { cursor ->
-            AppResult.Success(readSummaries(cursor).associateBy(EntitySummary::id))
+        val distinctIds = ids.distinct()
+        if (distinctIds.isEmpty()) return AppResult.Success(emptyMap())
+        val summaries = linkedMapOf<String, EntitySummary>()
+        for (chunk in distinctIds.chunked(MAX_BIND_PARAMETERS)) {
+            val placeholders = chunk.joinToString(",") { "?" }
+            when (val result = query("$SUMMARY_COLUMNS WHERE e.id IN ($placeholders)", chunk.toTypedArray()) { cursor ->
+                AppResult.Success(readSummaries(cursor))
+            }) {
+                is AppResult.Success -> result.value.forEach { summaries[it.id] = it }
+                is AppResult.Failure -> return result
+            }
         }
+        return AppResult.Success(summaries)
     }
 
     suspend fun detail(id: String): AppResult<EntityDetail?> = query("SELECT * FROM entities WHERE id = ? LIMIT 1", arrayOf(id)) { cursor ->
@@ -156,22 +177,45 @@ class ContentDatabase internal constructor(
         arrayOf(type),
     ) { cursor -> AppResult.Success(buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }) }
 
-    suspend fun searchPrefix(query: SearchQuery, limit: Int): AppResult<List<SearchDocument>> {
+    suspend fun searchPrefix(query: SearchQuery, limit: Int, entityTypes: Set<String> = emptySet()): AppResult<List<SearchDocument>> {
         val like = "${query.normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")}%"
-        return query(SEARCH_PREFIX, arrayOf(like, like, like, like, like, limit.toString())) { cursor ->
-            AppResult.Success(buildList { while (cursor.moveToNext()) add(cursor.toSearchDocument()) })
+        return when (val statement = filteredSearchStatement(SEARCH_PREFIX, arrayOf(like, like, like, like, like), limit, entityTypes)) {
+            is AppResult.Success -> query(statement.value.sql, statement.value.args) { cursor ->
+                AppResult.Success(buildList { while (cursor.moveToNext()) add(cursor.toSearchDocument()) })
+            }
+            is AppResult.Failure -> statement
         }
     }
 
-    suspend fun searchAliases(query: String, limit: Int): AppResult<List<EntitySummary>> = query(SEARCH_ALIAS, arrayOf(query, limit.toString())) { cursor ->
-        AppResult.Success(readSummaries(cursor))
-    }
+    suspend fun searchAliases(query: String, limit: Int, entityTypes: Set<String> = emptySet()): AppResult<List<EntitySummary>> =
+        when (val statement = filteredSearchStatement(SEARCH_ALIAS, arrayOf(query), limit, entityTypes)) {
+            is AppResult.Success -> query(statement.value.sql, statement.value.args) { cursor -> AppResult.Success(readSummaries(cursor)) }
+            is AppResult.Failure -> statement
+        }
 
-    suspend fun searchFts(ftsQuery: String, limit: Int): AppResult<List<EntitySummary>> = query(SEARCH_FTS, arrayOf(ftsQuery, limit.toString())) { cursor ->
-        AppResult.Success(readSummaries(cursor))
-    }
+    suspend fun searchFts(ftsQuery: String, limit: Int, entityTypes: Set<String> = emptySet()): AppResult<List<EntitySummary>> =
+        when (val statement = filteredSearchStatement(SEARCH_FTS, arrayOf(ftsQuery), limit, entityTypes)) {
+            is AppResult.Success -> query(statement.value.sql, statement.value.args) { cursor -> AppResult.Success(readSummaries(cursor)) }
+            is AppResult.Failure -> statement
+        }
 
     fun close() = database.close()
+
+    private fun filteredSearchStatement(
+        baseSql: String,
+        initialArgs: Array<String>,
+        limit: Int,
+        entityTypes: Set<String>,
+    ): AppResult<SearchStatement> {
+        val types = entityTypes.toList().sorted()
+        if (types.size > MAX_BIND_PARAMETERS - initialArgs.size - 1) {
+            return AppResult.Failure(AppError.DatabaseQueryFailed("搜索筛选类型过多"))
+        }
+        val typeClause = types.takeIf { it.isNotEmpty() }
+            ?.let { " AND e.entity_type IN (${it.joinToString(",") { "?" }})" }
+            .orEmpty()
+        return AppResult.Success(SearchStatement("$baseSql$typeClause LIMIT ?", initialArgs + types + limit.toString()))
+    }
 
     private suspend fun count(table: String): AppResult<Int> = query("SELECT COUNT(*) FROM $table") { cursor ->
         if (!cursor.moveToFirst()) AppResult.Failure(AppError.DatabaseQueryFailed("无法读取 $table 数量"))
@@ -220,8 +264,11 @@ class ContentDatabase internal constructor(
         const val SUMMARY_COLUMNS = "$SUMMARY_SELECT$SUMMARY_FROM"
         const val SUMMARY_BY_ID = "$SUMMARY_COLUMNS WHERE e.id = ? LIMIT 1"
         const val SUMMARIES_BY_TYPE = "$SUMMARY_COLUMNS WHERE e.entity_type = ? ORDER BY CASE WHEN s.pinyin IS NULL OR s.pinyin = '' THEN 1 ELSE 0 END, s.pinyin COLLATE NOCASE, e.name_zh COLLATE NOCASE"
-        const val SEARCH_PREFIX = "$SUMMARY_SELECT, s.pinyin, s.pinyin_initials$SUMMARY_FROM WHERE e.name_zh LIKE ? ESCAPE '\\' OR e.name_en LIKE ? ESCAPE '\\' COLLATE NOCASE OR s.pinyin LIKE ? ESCAPE '\\' OR REPLACE(s.pinyin, ' ', '') LIKE ? ESCAPE '\\' OR s.pinyin_initials LIKE ? ESCAPE '\\' LIMIT ?"
-        const val SEARCH_ALIAS = "$SUMMARY_COLUMNS JOIN entity_aliases a ON a.entity_id = e.id WHERE a.alias = ? LIMIT ?"
-        const val SEARCH_FTS = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, s.pinyin AS sort_key FROM entity_search s JOIN entities e ON e.id = s.entity_id WHERE entity_search MATCH ? LIMIT ?"
+        const val SEARCH_PREFIX = "$SUMMARY_SELECT, s.pinyin, s.pinyin_initials$SUMMARY_FROM WHERE (e.name_zh LIKE ? ESCAPE '\\' OR e.name_en LIKE ? ESCAPE '\\' COLLATE NOCASE OR s.pinyin LIKE ? ESCAPE '\\' OR REPLACE(s.pinyin, ' ', '') LIKE ? ESCAPE '\\' OR s.pinyin_initials LIKE ? ESCAPE '\\')"
+        const val SEARCH_ALIAS = "$SUMMARY_COLUMNS JOIN entity_aliases a ON a.entity_id = e.id WHERE a.alias = ?"
+        const val SEARCH_FTS = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, s.pinyin AS sort_key FROM entity_search s JOIN entities e ON e.id = s.entity_id WHERE entity_search MATCH ?"
+        const val MAX_BIND_PARAMETERS = 900
+
+        private data class SearchStatement(val sql: String, val args: Array<String>)
     }
 }

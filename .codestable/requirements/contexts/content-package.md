@@ -27,8 +27,9 @@ code-paths:
 - `DataPackageContract` 先检查格式、schema、语言、发布资格、质量、数据库路径和 SHA-256 格式；不支持的旧 schema 明确拒绝，不回退到旧查询协议。
 - `DataPackageValidator` 在 staging 包上校验数据库哈希、SQLite `quick_check`、`build_meta`、`artifact_metadata`、实体总数、类型目录、搜索索引数量和非空图片路径。`quick_check` 使用临时可写副本；日常内容库仍以只读方式打开。
 - 压缩包先进入 staging；`SafeZipExtractor` 拒绝绝对路径、目录越界、空名称、过多条目和超限内容。当前上限为压缩包 512 MiB、解压后 1 GiB、10000 个文件。
-- 激活顺序是关闭旧内容库、更新活动包标识、打开新库并确认成功；打开失败时恢复旧活动包并重新打开旧库。成功后只保留活动包和上一包，失败包不能替换当前可用内容。
-- `ContentDatabaseManager` 独占当前 SQLite 句柄，并在 IO dispatcher 与互斥锁内打开/关闭；查询方不能自行持有跨切包的句柄。
+- 导入先在 staging 目录完成解压和完整校验；提交时临时保留同 ID 的旧目录，只有新库打开且旧备份清理完成才删除它。提交、打开或该替换备份清理失败都会恢复提交前的活动/上一包偏好和目录；无关旧包的后续清理失败会显式记录日志，但不伪装成新包启用失败。
+- 已激活包的手动验证失败会关闭当前内容库、清除内存元数据；仅当上一包再次完整校验并成功打开时才退回它，否则清空活动包。验证失败的包不得继续由页面缓存或重开句柄读取。
+- `DataPackageManager` 的生命周期锁包住仓储查询与目录替换；`ContentDatabaseManager` 在其内部独占当前 SQLite 句柄，并在 IO dispatcher 与互斥锁内打开/关闭。查询方不能自行持有跨切包的句柄。
 - 包根目录中的图片路径必须解析后仍位于包根目录；非空图片缺失是导入失败，不以占位图掩盖损坏包。没有图片路径的实体由图鉴边界提供占位图。
 - 真实发布级 schema 4 包不进入仓库。`verifyRealV4Package` 只接受显式 `STARDEW_SVDATA` 文件；不可发布 fixture、旧 schema 包和质量失败包只能用于拒绝路径测试。
 
@@ -37,6 +38,9 @@ code-paths:
 - `core/datapackage/DataPackageContract.kt`：发布条件与支持 schema。
 - `core/datapackage/DataPackageValidator.kt`：manifest、数据库元数据、统计和图片校验。
 - `core/datapackage/SafeZipExtractor.kt`：归档路径与体积边界。
-- `core/datapackage/DataPackageManager.kt`：安装、活动包切换、回滚和清理。
+- `core/datapackage/DataPackageInstaller.kt`、`DataPackageManager.kt`：暂存提交、活动包切换、验证失败停用、回滚和清理。
 - `core/database/content/ContentDatabaseFactory.kt`、`ContentDatabaseManager.kt`：只读数据库和句柄生命周期。
+- `data/ContentRepository.kt`、`SearchRepository.kt`：在活动包生命周期租约内读取内容。
 - `core/datastore/AppPreferencesRepository.kt`：活动包、上一包和最近验证标识。
+
+活动包读取与同 ID 替换的并发边界见 [ADR 004](../adrs/004-activity-package-read-lease.md)。
