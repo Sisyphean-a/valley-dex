@@ -94,7 +94,7 @@ class DefaultWikiCatalogue @Inject constructor(
             WikiEntry(
                 id = id,
                 title = entity.nameZh,
-                englishTitle = entity.nameEn?.takeIf(String::isNotBlank),
+                englishTitle = englishTitleForDisplay(entity.nameZh, entity.nameEn),
                 categoryLabel = typeLabel,
                 image = entity.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
                 summary = entity.descriptionZh?.takeIf(String::isNotBlank) ?: entity.descriptionEn?.takeIf(String::isNotBlank),
@@ -160,7 +160,7 @@ class DefaultWikiCatalogue @Inject constructor(
     ) = WikiEntrySummary(
         id = summary.id,
         title = summary.nameZh,
-        englishTitle = summary.nameEn,
+        englishTitle = englishTitleForDisplay(summary.nameZh, summary.nameEn),
         categoryLabel = typeLabel,
         filterCategory = summary.category,
         image = summary.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
@@ -181,6 +181,9 @@ class DefaultWikiCatalogue @Inject constructor(
 
     private fun <T> AppResult<T>.failure(): AppResult.Failure = this as AppResult.Failure
 }
+
+internal fun englishTitleForDisplay(title: String, englishTitle: String?): String? =
+    englishTitle?.trim()?.takeIf { it.isNotEmpty() && !it.equals(title.trim(), ignoreCase = true) }
 
 object WikiCatalogueConfiguration {
     private val configured = listOf(

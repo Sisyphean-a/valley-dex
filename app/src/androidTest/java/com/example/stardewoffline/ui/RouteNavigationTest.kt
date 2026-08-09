@@ -3,6 +3,7 @@ package com.example.stardewoffline.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -14,6 +15,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.stardewoffline.core.common.AppResult
+import com.example.stardewoffline.core.model.CatalogueDisplayMode
 import com.example.stardewoffline.core.datastore.AppPreferences
 import com.example.stardewoffline.core.ui.LocalAppPreferences
 import com.example.stardewoffline.core.ui.theme.StardewOfflineTheme
@@ -78,6 +80,31 @@ class RouteNavigationTest {
             assertTrue(composeRule.onAllNodesWithText("最近浏览").fetchSemanticsNodes().isEmpty())
             composeRule.onNodeWithTag("home-category:type:crop").performClick()
             composeRule.runOnIdle { assertEquals("type:crop", selected) }
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun typeListGridShowsImageEnglishNameAndCategory() = runBlocking {
+        val scenario = readyScenario()
+        try {
+            var gridDetail: String? = null
+            val viewModel = provide(scenario) {
+                TypeListViewModel(
+                    saved = SavedStateHandle(mapOf("categoryId" to "type:crop")),
+                    catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
+                    content = scenario.contentRepository,
+                )
+            }
+            viewModel.setDisplayMode(CatalogueDisplayMode.Grid)
+            setRoute { TypeListRoute(onDetail = { gridDetail = it }, viewModel = viewModel) }
+            waitForText("萝卜种子")
+            waitForText("Turnip Seeds")
+            composeRule.onNodeWithText("作物").assertExists()
+            composeRule.onNodeWithContentDescription("萝卜种子").assertExists()
+            composeRule.onNodeWithTag("wiki-grid-card:crop:1").performClick()
+            composeRule.runOnIdle { assertEquals("crop:1", gridDetail) }
         } finally {
             scenario.close()
         }

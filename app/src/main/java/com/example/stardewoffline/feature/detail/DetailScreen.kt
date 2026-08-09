@@ -107,11 +107,14 @@ private fun DetailHeader(entry: WikiEntry, packageRoot: java.io.File?, modifier:
                 imagePath = entry.image.relativePath(),
                 packageRoot = packageRoot,
                 name = entry.title,
+                categoryLabel = entry.categoryLabel,
                 modifier = Modifier.size(108.dp),
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(entry.title, style = MaterialTheme.typography.headlineSmall)
-                entry.englishTitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                entry.englishTitle?.takeUnless { it.trim().equals(entry.title.trim(), ignoreCase = true) }?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                }
                 Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
                     Text(entry.categoryLabel, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
