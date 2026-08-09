@@ -1,25 +1,26 @@
-# Attention
-
-本文件是 CodeStable 技能启动必读的项目注意事项入口。所有 CodeStable 子技能开始工作前必须读取它。
+# 项目注意事项
 
 ## 报告语言
 
-CodeStable 所有落盘产出的正文用中文：plan / design、plan review / design-review、code review、QA、验收、issue（report / analysis / fix-note）、refactor、roadmap、goal、沉淀（compound）等所有人读报告都用中文表达。机器状态（YAML / JSON / `state.yaml` / frontmatter 字段）保持机读格式不翻译。如需改默认语言，改这一节。
+项目记忆正文使用中文；YAML、JSON 和 frontmatter 的机器字段保持原样。
 
-## 项目碎片知识
+## 按范围加载
 
-<!-- cs-note managed: 用 cs-note 维护，新条目按下面分节追加 -->
+先读本文件和 `architecture/INDEX.md`，再按改动路径读取对应的包页、`requirements/CONTEXT.md` 及直接相关的领域上下文。不要默认遍历历史或旧过程资料。
 
-### 编译与构建
+## 长期约束
 
-### 运行与本地起服务
+- 应用完全离线：不联网、不读取玩家存档、不上传收藏、历史、笔记或搜索内容。
+- 内容数据包只接受当前支持的发布级 schema 4；`stardew.db` 只读，收藏、历史、笔记和搜索历史写入独立的 Room 数据库。
+- 不提交真实 `.svdata`、游戏图片或签名密钥；未知字段、条件和关系不得被猜测成游戏结论。
+- 真实 schema 4 成功包来自工作区外；需要真实包时显式设置 `STARDEW_SVDATA`，不能用 fixture 冒充发布验收。
 
-### 测试
+## 验证入口
 
-### 命令与脚本陷阱
+- `./gradlew.bat assembleDebug`
+- `./gradlew.bat testDebugUnitTest`
+- `./gradlew.bat lintDebug`
+- 有设备时执行 `./gradlew.bat connectedDebugAndroidTest`
+- 真实包验收执行 `./gradlew.bat verifyRealV4Package`，并先设置 `STARDEW_SVDATA`。
 
-### 路径与目录约定
-
-### 环境变量与凭证
-
-### 其他
+完整设备测试未通过前，不把编译、单测或部分仪器测试写成最终功能验收通过。
