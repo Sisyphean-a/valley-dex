@@ -19,6 +19,15 @@ class DetailFormattersTest {
     }
 
     @Test
+    fun formatsScheduleRuleKeysWithoutLeakingInternalTokens() {
+        assertEquals("春季第4天日程", DetailFormatters.scheduleRule("spring_4"))
+        assertEquals("周五（友谊等级6）日程", DetailFormatters.scheduleRule("Fri_6"))
+        assertEquals("婚后工作日程", DetailFormatters.scheduleRule("marriageJob"))
+        assertEquals("无日程", DetailFormatters.scheduleRule("NO_SCHEDULE"))
+        assertEquals("特殊日程规则", DetailFormatters.scheduleRule("unknown_internal_key"))
+    }
+
+    @Test
     fun preservesUnknownEnumsAndFishAreas() {
         assertEquals("剑", DetailFormatters.weaponType("0"))
         assertEquals("防御剑", DetailFormatters.weaponType("3"))

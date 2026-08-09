@@ -17,6 +17,10 @@ class ContentRepository @Inject constructor(
 ) {
     suspend fun typeCounts(): AppResult<List<EntityTypeCount>> = databaseResult { it.typeCounts() }
     suspend fun summaries(type: String): AppResult<List<EntitySummary>> = databaseResult { it.summariesByType(type) }
+    suspend fun details(type: String): AppResult<List<EntityDetail>> = databaseResult { it.detailsByType(type) }
+    suspend fun detailsByIds(ids: List<String>): AppResult<List<EntityDetail>> =
+        if (ids.isEmpty()) AppResult.Success(emptyList()) else databaseResult { it.detailsByIds(ids) }
+    suspend fun supportIds(sourceId: String): AppResult<List<String>> = databaseResult { it.supportIds(sourceId) }
     suspend fun summary(id: String): AppResult<EntitySummary?> = databaseResult { it.summary(id) }
     suspend fun summaries(ids: List<String>): AppResult<Map<String, EntitySummary>> = databaseResult { it.summariesByIds(ids) }
     suspend fun detail(id: String): AppResult<EntityDetail?> = databaseResult { it.detail(id) }

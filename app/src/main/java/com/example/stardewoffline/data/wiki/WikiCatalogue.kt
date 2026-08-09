@@ -7,6 +7,7 @@ import com.example.stardewoffline.core.datapackage.DataPackageManager
 import com.example.stardewoffline.core.json.DetailPresentationParser
 import com.example.stardewoffline.core.model.CataloguePage
 import com.example.stardewoffline.core.model.CatalogueQuery
+import com.example.stardewoffline.core.model.DetailRelation
 import com.example.stardewoffline.core.model.CategoryCover
 import com.example.stardewoffline.core.model.EntryFact
 import com.example.stardewoffline.core.model.EntryImage
@@ -16,6 +17,9 @@ import com.example.stardewoffline.core.model.ManifestEntityType
 import com.example.stardewoffline.core.model.RelationTarget
 import com.example.stardewoffline.core.model.WikiCategory
 import com.example.stardewoffline.core.model.WikiEntry
+import com.example.stardewoffline.core.model.WikiEntrySubmenu
+import com.example.stardewoffline.core.model.WikiEntrySubmenuGroup
+import com.example.stardewoffline.core.model.WikiEntrySubmenuItem
 import com.example.stardewoffline.core.model.WikiEntrySummary
 import com.example.stardewoffline.core.model.WikiSearchHit
 import com.example.stardewoffline.core.model.WikiSearchQuery
@@ -25,6 +29,8 @@ import com.example.stardewoffline.data.EntityRelationResolver
 import com.example.stardewoffline.data.SearchRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private val SUPPORT_ENTITY_TYPES = setOf("npc_schedule", "villager_gift")
 
 interface WikiCatalogue {
     suspend fun sections(): AppResult<List<WikiSection>>
@@ -90,6 +96,23 @@ class DefaultWikiCatalogue @Inject constructor(
         val presentation = DetailPresentationParser.present(entity)
         val targets = relations.resolve(presentation.relationGroups.flatMap { it.relations })
         val aliases = content.aliases(id).getOrNull().orEmpty()
+        val submenus = if (entity.entityType == "villager") {
+            val sourceId = entity.id.substringAfter(':', entity.id)
+            val supportIds = content.supportIds(sourceId)
+            if (supportIds is AppResult.Failure) return AppResult.Failure(supportIds.error)
+            val supportDetails = content.detailsByIds((supportIds as AppResult.Success).value)
+            if (supportDetails is AppResult.Failure) return AppResult.Failure(supportDetails.error)
+            val details = (supportDetails as AppResult.Success).value
+            val support = VillagerSupportPresentationBuilder.build(
+                sourceId,
+                details.filter { it.entityType == "npc_schedule" },
+                details.filter { it.entityType == "villager_gift" },
+            )
+            val giftTargets = relations.resolve(
+                support.giftItemIds.map { DetailRelation("礼物偏好", it) },
+            )
+            supportSubmenus(support, giftTargets)
+        } else emptyList()
         return AppResult.Success(
             WikiEntry(
                 id = id,
@@ -100,6 +123,7 @@ class DefaultWikiCatalogue @Inject constructor(
                 summary = entity.descriptionZh?.takeIf(String::isNotBlank) ?: entity.descriptionEn?.takeIf(String::isNotBlank),
                 sections = entrySections(presentation.facts, aliases),
                 relations = presentation.relationGroups.flatMap { group -> group.relations.map { toEntryRelation(group.title, it, targets) } },
+                submenus = submenus,
             ),
         )
     }
@@ -131,6 +155,7 @@ class DefaultWikiCatalogue @Inject constructor(
     ): AppResult<List<WikiSearchHit>> {
         val hits = mutableListOf<WikiSearchHit>()
         for (result in results) {
+            if (result.summary.entityType in SUPPORT_ENTITY_TYPES) continue
             if (selectedTypes.isNotEmpty() && result.summary.entityType !in selectedTypes) continue
             val label = labels[result.summary.entityType]
                 ?: return AppResult.Failure(AppError.InvalidEntityTypeCatalog("未声明类型：${result.summary.entityType}"))
@@ -168,9 +193,64 @@ class DefaultWikiCatalogue @Inject constructor(
 
     private fun toEntryFact(fact: com.example.stardewoffline.core.model.DetailFact) = EntryFact(fact.label, fact.value)
 
+    private fun scheduleGroups(schedules: List<VillagerScheduleItem>): List<WikiEntrySubmenuGroup> {
+        val order = listOf("春季", "夏季", "秋季", "冬季", "通用日期", "天气与节日", "婚后日程", "其他特殊日程")
+        return order.mapNotNull { group ->
+            val items = schedules.filter { it.group == group }.sortedBy { it.order }
+            items.takeIf { it.isNotEmpty() }?.let {
+                WikiEntrySubmenuGroup(
+                    group,
+                    it.map { schedule -> WikiEntrySubmenuItem(schedule.label, schedule.details.map { fact -> EntryFact(fact.label, fact.value) }) },
+                )
+            }
+        }
+    }
+
+    private fun supportSubmenus(
+        support: VillagerSupportPresentation,
+        targets: Map<String, com.example.stardewoffline.core.model.EntitySummary>,
+    ): List<WikiEntrySubmenu> = buildList {
+        if (support.schedules.isNotEmpty()) add(
+            WikiEntrySubmenu(
+                title = "日程",
+                summary = "${support.schedules.size} 条季节/日期规则",
+                groups = scheduleGroups(support.schedules),
+            ),
+        )
+        if (support.gifts.values.any { it.isNotEmpty() }) {
+            add(
+                WikiEntrySubmenu(
+                    title = "礼物偏好",
+                    summary = "${support.gifts.values.sumOf { it.size }} 项偏好",
+                    groups = support.gifts.map { (label, items) ->
+                        WikiEntrySubmenuGroup(
+                            label,
+                            items.map { item ->
+                                val target = item.itemId?.let { raw ->
+                                    targets[raw]?.let { summary -> RelationTarget.Entry(summary.id, summary.nameZh) }
+                                }
+                                WikiEntrySubmenuItem(
+                                    label = target?.displayName() ?: item.readableLabel ?: "物品暂未收录",
+                                    details = item.details.map { EntryFact(it.label, it.value) },
+                                    target = target,
+                                )
+                            },
+                        )
+                    },
+                ),
+            )
+        }
+    }
+
+    private fun RelationTarget.displayName(): String = when (this) {
+        is RelationTarget.Entry -> title
+        is RelationTarget.ReadableText -> value
+        is RelationTarget.Unavailable -> message
+    }
+
     private fun toEntryRelation(
         section: String,
-        relation: com.example.stardewoffline.core.model.DetailRelation,
+        relation: DetailRelation,
         targets: Map<String, com.example.stardewoffline.core.model.EntitySummary>,
     ): EntryRelation {
         val target = targets[relation.targetId]?.let { RelationTarget.Entry(it.id, it.nameZh) }
@@ -188,16 +268,20 @@ internal fun englishTitleForDisplay(title: String, englishTitle: String?): Strin
 object WikiCatalogueConfiguration {
     private val configured = listOf(
         ConfiguredCategory(id = "farm", title = "农场与物品", types = setOf("object", "crop", "big_craftable", "tool", "ring", "weapon", "footwear", "trinket"), cover = "cover-farm"),
-        ConfiguredCategory(id = "people", title = "村民与世界", types = setOf("villager", "monster", "fish", "mineral", "ginger_island"), cover = "cover-world"),
+        ConfiguredCategory(id = "villagers", title = "村民", types = setOf("villager"), cover = "cover-world"),
+        ConfiguredCategory(id = "people", title = "世界与生物", types = setOf("monster", "fish", "mineral", "ginger_island"), cover = "cover-world"),
         ConfiguredCategory(id = "activities", title = "活动与配方", types = setOf("achievement", "bundle", "quest", "special_order", "cooking_recipe", "crafting_recipe", "tailoring_recipe"), cover = "cover-activities"),
     )
 
     fun sections(types: List<ManifestEntityType>): List<WikiSection> {
         val available = types.filter { it.count > 0 }.associateBy(ManifestEntityType::id)
         val featured = configured.mapNotNull { it.toWikiCategory(available) }
-        val all = available.values.sortedBy(ManifestEntityType::displayName).map { type ->
-            WikiCategory("type:${type.id}", type.displayName, setOf(type.id), type.count, CategoryCover("type-${type.id}"))
-        }
+        val all = available.values
+            .filterNot { it.id in SUPPORT_ENTITY_TYPES }
+            .sortedBy(ManifestEntityType::displayName)
+            .map { type ->
+                WikiCategory("type:${type.id}", type.displayName, setOf(type.id), type.count, CategoryCover("type-${type.id}"))
+            }
         return listOfNotNull(
             featured.takeIf { it.isNotEmpty() }?.let { WikiSection("featured", "主题图鉴", it) },
             WikiSection("all", "全部分类", all),

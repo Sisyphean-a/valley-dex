@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +41,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.example.stardewoffline.core.model.EntryFact
 import com.example.stardewoffline.core.model.EntryImage
@@ -45,6 +50,8 @@ import com.example.stardewoffline.core.model.EntryRelation
 import com.example.stardewoffline.core.model.EntrySection
 import com.example.stardewoffline.core.model.RelationTarget
 import com.example.stardewoffline.core.model.WikiEntry
+import com.example.stardewoffline.core.model.WikiEntrySubmenu
+import com.example.stardewoffline.core.model.WikiEntrySubmenuItem
 import com.example.stardewoffline.core.ui.component.EntityImage
 
 @Composable
@@ -71,6 +78,9 @@ fun DetailScreen(
             item { DetailHeader(entry, state.packageRoot, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
             items(entry.sections, key = EntrySection::title) { section ->
                 EntrySectionCard(section, Modifier.padding(horizontal = 20.dp))
+            }
+            items(entry.submenus, key = WikiEntrySubmenu::title) { submenu ->
+                EntrySubmenuCard(submenu, onDetail, Modifier.padding(horizontal = 20.dp))
             }
             item { RelationSection(entry.relations, onDetail, Modifier.padding(horizontal = 20.dp)) }
             item { NoteSection(note, onSaveNote, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
@@ -141,6 +151,71 @@ private fun FactRow(fact: EntryFact) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(fact.label, modifier = Modifier.weight(0.38f), style = MaterialTheme.typography.labelLarge)
         Text(fact.value, modifier = Modifier.weight(0.62f), style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EntrySubmenuCard(submenu: WikiEntrySubmenu, onDetail: (String) -> Unit, modifier: Modifier) {
+    var expanded by rememberSaveable(submenu.title) { mutableStateOf(submenu.initiallyExpanded) }
+    Card(modifier = modifier.fillMaxWidth().testTag("detail-submenu:${submenu.title}")) {
+        Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("detail-submenu-header:${submenu.title}")
+                    .clickable(role = Role.Button) { expanded = !expanded }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(submenu.title, style = MaterialTheme.typography.titleMedium)
+                    Text(submenu.summary, style = MaterialTheme.typography.bodySmall)
+                }
+                Text(if (expanded) "收起" else "展开", style = MaterialTheme.typography.labelLarge)
+            }
+            if (expanded) {
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    submenu.groups.forEach { group ->
+                        Text(group.title, style = MaterialTheme.typography.labelLarge)
+                        if (group.items.isEmpty()) {
+                            Text("暂无记录", style = MaterialTheme.typography.bodySmall)
+                        } else if (submenu.title == "礼物偏好") {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                group.items.forEach { item ->
+                                    val target = item.target as? RelationTarget.Entry
+                                    AssistChip(
+                                        onClick = { target?.let { onDetail(it.id) } },
+                                        enabled = target != null,
+                                        label = { Text(item.label) },
+                                        modifier = Modifier.testTag("detail-gift-chip:${group.title}:${item.label}"),
+                                    )
+                                }
+                            }
+                        } else {
+                            group.items.forEach { item -> SubmenuItemRow(item, onDetail) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubmenuItemRow(item: WikiEntrySubmenuItem, onDetail: (String) -> Unit) {
+    var expanded by rememberSaveable(item.label) { mutableStateOf(false) }
+    val target = item.target as? RelationTarget.Entry
+    Card(
+        modifier = Modifier.fillMaxWidth().testTag("detail-submenu-row:${item.label}"),
+        onClick = {
+            if (target != null) onDetail(target.id) else expanded = !expanded
+        },
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(item.label, style = MaterialTheme.typography.bodyMedium)
+            if (expanded || target != null) item.details.forEach { FactRow(it) }
+        }
     }
 }
 

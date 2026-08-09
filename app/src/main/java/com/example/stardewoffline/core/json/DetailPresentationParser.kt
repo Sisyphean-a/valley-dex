@@ -854,11 +854,8 @@ object DetailPresentationParser {
     private fun scheduleDirective(value: String): String? {
         val parts = value.split(Regex("\\s+"), limit = 2)
         return when (parts.firstOrNull()?.uppercase()) {
-            "MAIL" -> parts.getOrNull(1)?.let { "邮件：$it" }
-            "GOTO" -> parts.getOrNull(1)?.let {
-                val season = DetailFormatters.season(it)
-                "跳转到：${if (season != it) season else DetailFormatters.location(it)}"
-            }
+            "MAIL" -> parts.getOrNull(1)?.let { "触发游戏邮件" }
+            "GOTO" -> parts.getOrNull(1)?.let { "跳转到：${DetailFormatters.scheduleRule(it)}" }
             else -> null
         }
     }

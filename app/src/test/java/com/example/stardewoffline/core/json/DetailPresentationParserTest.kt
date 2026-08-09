@@ -123,9 +123,11 @@ class DetailPresentationParserTest {
         assertTrue(bundle.relationGroups.single { it.title == "收集包要求" }.relations.any { it.targetId == "24" })
 
         val schedule = DetailPresentationParser.present(entity("npc_schedule", """
-            {"legacyFields":["GOTO spring","a1200 SeedShop 1 9 3","1700 Saloon 4 5 2"]}
+            {"legacyFields":["GOTO spring","MAIL internal_event_42","a1200 SeedShop 1 9 3","1700 Saloon 4 5 2"]}
         """))
         assertTrue(schedule.facts.any { it.label == "日程指令" && it.value.contains("春季") })
+        assertTrue(schedule.facts.any { it.label == "日程指令" && it.value.contains("触发游戏邮件") })
+        assertTrue(schedule.facts.none { it.value.contains("internal_event_42") })
         assertTrue(schedule.facts.any { it.label == "日程" && it.value.contains("12:00") })
         assertEquals(2, schedule.relationGroups.single { it.title == "日程地点" }.relations.size)
     }

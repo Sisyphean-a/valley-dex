@@ -77,6 +77,52 @@ class ContentDatabase internal constructor(
         AppResult.Success(readSummaries(cursor))
     }
 
+    suspend fun detailsByType(type: String): AppResult<List<EntityDetail>> = query(
+        "SELECT * FROM entities WHERE entity_type = ? ORDER BY id COLLATE NOCASE",
+        arrayOf(type),
+    ) { cursor -> readDetails(cursor) }
+
+    suspend fun detailsByIds(ids: List<String>): AppResult<List<EntityDetail>> {
+        if (ids.isEmpty()) return AppResult.Success(emptyList())
+        val placeholders = ids.joinToString(",") { "?" }
+        return query(
+            "SELECT * FROM entities WHERE id IN ($placeholders) ORDER BY id COLLATE NOCASE",
+            ids.toTypedArray(),
+        ) { cursor -> readDetails(cursor) }
+    }
+
+    /**
+     * Flow: use indexed identity/source columns to find only this villager's support rows;
+     * detail JSON is read separately in one parameterized batch.
+     */
+    suspend fun supportIds(sourceId: String): AppResult<List<String>> {
+        if (sourceId.isBlank()) return AppResult.Success(emptyList())
+        val names = listOf(sourceId, "LeoMainland".takeIf { sourceId.equals("Leo", ignoreCase = true) })
+            .filterNotNull().distinct()
+        if (names.isEmpty()) return AppResult.Success(emptyList())
+        val predicates = names.flatMap { name ->
+            val scheduleId = "npc_schedule:$name"
+            val giftId = "villager_gift:$name"
+            listOf(
+                "(entity_type = 'npc_schedule' AND (id = ? OR id LIKE ? OR id LIKE ? OR id LIKE ? OR source_file = ? OR source_file LIKE ?))",
+                "(entity_type = 'villager_gift' AND (id = ? OR id LIKE ? OR id LIKE ? OR id LIKE ?))",
+            )
+        }
+        val args = names.flatMap { name ->
+            val scheduleId = "npc_schedule:$name"
+            val giftId = "villager_gift:$name"
+            listOf(
+                scheduleId, "$scheduleId:%", "$scheduleId/%", "$scheduleId|%",
+                "Characters/schedules/$name.json", "%/schedules/$name.json",
+                giftId, "$giftId:%", "$giftId/%", "$giftId|%",
+            )
+        }
+        return query(
+            "SELECT id FROM entities WHERE ${predicates.joinToString(" OR ")} ORDER BY id COLLATE NOCASE",
+            args.toTypedArray(),
+        ) { cursor -> AppResult.Success(buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }) }
+    }
+
     suspend fun summariesByIds(ids: List<String>): AppResult<Map<String, EntitySummary>> {
         if (ids.isEmpty()) return AppResult.Success(emptyMap())
         val placeholders = ids.joinToString(",") { "?" }
@@ -138,6 +184,27 @@ class ContentDatabase internal constructor(
     }
 
     private fun readSummaries(cursor: Cursor) = buildList { while (cursor.moveToNext()) add(cursor.toSummary()) }
+
+    private fun readDetails(cursor: Cursor): AppResult<List<EntityDetail>> {
+        val details = buildList {
+            while (cursor.moveToNext()) {
+                val extra = runCatching { Json.Default.parseToJsonElement(cursor.string("extra_json")) as JsonObject }
+                    .getOrElse { return AppResult.Failure(AppError.JsonParseFailed(it.message ?: "extra_json 无效")) }
+                add(
+                    EntityDetail(
+                        id = cursor.string("id"), entityType = cursor.string("entity_type"), gameId = cursor.optional("game_id"),
+                        internalName = cursor.optional("internal_name"), nameZh = cursor.string("name_zh"), nameEn = cursor.optional("name_en"),
+                        descriptionZh = cursor.optional("description_zh"), descriptionEn = cursor.optional("description_en"),
+                        category = cursor.optional("category"), translationStatus = cursor.optional("translation_status").toTranslationStatus(),
+                        imagePath = cursor.optional("image_path"), extraJson = extra, sourceFile = cursor.optional("source_file"),
+                        createdAt = cursor.string("created_at"),
+                    ),
+                )
+            }
+        }
+        return AppResult.Success(details)
+    }
+
     private fun parseArtifactMetadata(raw: String): ArtifactMetadata? = runCatching {
         Json.Default.decodeFromString<ArtifactMetadata>(raw)
     }.getOrNull()

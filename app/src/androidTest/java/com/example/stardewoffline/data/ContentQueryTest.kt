@@ -29,6 +29,9 @@ class ContentQueryTest {
             install(scenario)
             assertEquals(setOf("object", "crop", "fish", "villager"), scenario.contentRepository.typeCounts().getOrNull()?.map { it.type }?.toSet())
             assertEquals(listOf("萝卜种子"), scenario.contentRepository.summaries("crop").getOrNull()?.map { it.nameZh })
+            assertEquals(emptyList<String>(), scenario.contentRepository.detailsByIds(emptyList()).getOrNull()?.map { it.id })
+            assertEquals(listOf("crop:1", "fish:1"), scenario.contentRepository.detailsByIds(listOf("crop:1", "fish:1")).getOrNull()?.map { it.id })
+            assertEquals(emptyList<String>(), scenario.contentRepository.supportIds("Alice").getOrNull())
             val crop = scenario.contentRepository.detail("crop:1").getOrNull() ?: error("缺少 crop:1")
             val derived = crop.extraJson["officialDerived"] as? JsonObject
             assertEquals(JsonPrimitive("object:1"), derived?.get("harvestItemId"))

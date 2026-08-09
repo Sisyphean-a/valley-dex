@@ -60,6 +60,25 @@ data class WikiEntry(
     val summary: String?,
     val sections: List<EntrySection>,
     val relations: List<EntryRelation>,
+    val submenus: List<WikiEntrySubmenu> = emptyList(),
+)
+
+data class WikiEntrySubmenu(
+    val title: String,
+    val summary: String,
+    val groups: List<WikiEntrySubmenuGroup>,
+    val initiallyExpanded: Boolean = false,
+)
+
+data class WikiEntrySubmenuGroup(
+    val title: String,
+    val items: List<WikiEntrySubmenuItem>,
+)
+
+data class WikiEntrySubmenuItem(
+    val label: String,
+    val details: List<EntryFact> = emptyList(),
+    val target: RelationTarget? = null,
 )
 
 data class EntrySection(val title: String, val facts: List<EntryFact>)

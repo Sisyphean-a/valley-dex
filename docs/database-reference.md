@@ -216,7 +216,7 @@ stardew-zh-cn.svdata
 | `quest` | `Targets`, `Count`, `RewardItemId`, `RewardItemPrice`, `RewardMail`, `RewardMailAll`, `RewardDialogue`, `RewardDialogueFlag`, `RewardFlag`, `RewardFlagAll`, `DisplayName`, `CustomFields`。 |
 | `bundle` | `AreaName`, `Keys`, `BundleSets`, `Bundles`；其中包项有 `Name`, `Index`, `Sprite`, `Color`, `Items`, `Pick`, `RequiredItems`, `Reward`。 |
 | `drop` | `monsterId`（掉落怪物 ID）、`itemId`（掉落物品 ID）、`chance`（旧式记录的概率文本）。 |
-| `achievement` / `fish` / `furniture` / `footwear` / `monster` / `npc_schedule` / `villager_gift` / `ginger_island` / 配方 | `legacyValue` 为未拆分的官方斜杠记录，`legacyFields` 为按 `/` 切分后的数组。位置含义随资产类型不同；应用不要依赖其下标，改用已有标准列和 `officialDerived`。配方另有 `outputItemId`、`outputEntityType`；制作配方可有 `hasExplicitDisplayName`。 |
+| `achievement` / `fish` / `furniture` / `footwear` / `monster` / `npc_schedule` / `villager_gift` / `ginger_island` / 配方 | `legacyValue` 为未拆分的官方斜杠记录，`legacyFields` 为按 `/` 切分后的数组。一般应用不要依赖其下标，改用已有标准列和 `officialDerived`；**例外**是村民支援记录：`villager_gift` 的 1、3、5、7、9 槽分别对应最爱、喜欢、一般、不喜欢、讨厌，空槽必须保留；`npc_schedule` 的稳定 ID 源键（如 `spring`、`spring_4`、`winter_15`）决定季节默认规则或日期覆盖，应用应按四季和日期分组，并将雨天、节日、婚后等选择规则单独展示。配方另有 `outputItemId`、`outputEntityType`；制作配方可有 `hasExplicitDisplayName`。 |
 
 `_provenance`、`officialDerived` 及前述图像补充字段也可能出现在任意类型；`CustomFields`、`ModData` 是官方自定义扩展容器，内部键不属于本项目的稳定接口。
 

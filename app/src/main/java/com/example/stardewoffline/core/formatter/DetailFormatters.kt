@@ -15,6 +15,16 @@ object DetailFormatters {
         "winter" to "冬季",
     )
 
+    private val scheduleWeekdays = mapOf(
+        "mon" to "周一",
+        "tue" to "周二",
+        "wed" to "周三",
+        "thu" to "周四",
+        "fri" to "周五",
+        "sat" to "周六",
+        "sun" to "周日",
+    )
+
     private val locations = mapOf(
         "beach" to "海滩",
         "town" to "鹈鹕镇",
@@ -158,6 +168,53 @@ object DetailFormatters {
     fun season(value: String) = seasons[value.trim().lowercase(Locale.ROOT)] ?: value
 
     fun seasons(values: List<String>) = values.joinToString("、", transform = ::season)
+
+    fun scheduleRule(value: String): String {
+        val key = value.trim()
+        val normalized = key.lowercase(Locale.ROOT)
+        if (normalized == "no_schedule") return "无日程"
+        if (normalized == "season") return "当前季节默认日程"
+        if (normalized == "marriagejob") return "婚后工作日程"
+        if (normalized.startsWith("marriage_")) return "婚后·${scheduleRule(key.substringAfter('_'))}"
+        if (normalized == "rain") return "下雨天日程"
+        if (normalized == "rain2") return "下雨天日程（变体）"
+        if (normalized == "greenrain") return "绿雨天日程"
+        if (normalized.startsWith("desertfestival")) {
+            val day = key.substringAfter('_', "").takeIf(String::isNotBlank)?.let { "第${it}天" }.orEmpty()
+            return "沙漠节${day}日程"
+        }
+        if (key.matches(Regex("\\d+(?:_\\d+)?"))) {
+            val parts = key.split('_')
+            val friendship = parts.getOrNull(1)?.toIntOrNull()?.let { "（友谊等级${it}）" }.orEmpty()
+            return "第${parts.first()}天${friendship}日程"
+        }
+        val parts = key.split('_').filter(String::isNotBlank)
+        val head = parts.firstOrNull()?.lowercase(Locale.ROOT).orEmpty()
+        val seasonName = seasons[head]
+        val weekdayName = scheduleWeekdays[head]
+        if (seasonName != null) {
+            val suffix = parts.getOrNull(1)
+            val day = suffix?.toIntOrNull()
+            val weekday = scheduleWeekdays[suffix?.lowercase(Locale.ROOT)]
+            val friendship = parts.getOrNull(2)?.toIntOrNull()?.let { "（友谊等级${it}）" }.orEmpty()
+            return when {
+                day != null -> "${seasonName}第${day}天${friendship}日程"
+                weekday != null -> "${seasonName}${weekday}${friendship}日程"
+                suffix == null -> "${seasonName}默认日程"
+                else -> "${seasonName}特殊日程"
+            }
+        }
+        if (weekdayName != null) {
+            val suffix = parts.getOrNull(1)
+            return when {
+                suffix.equals("normal", true) -> "${weekdayName}常规日程"
+                suffix?.toIntOrNull() != null -> "${weekdayName}（友谊等级${suffix}）日程"
+                suffix == null -> "${weekdayName}日程"
+                else -> "${weekdayName}特殊日程"
+            }
+        }
+        return "特殊日程规则"
+    }
 
     fun bool(value: Boolean) = if (value) "是" else "否"
 
