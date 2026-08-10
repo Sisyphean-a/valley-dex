@@ -153,10 +153,11 @@ class RouteNavigationTest {
                 )
             }
             setRoute { SearchRoute(onDetail = { searchDetail = it }, viewModel = searchViewModel) }
-            waitForText("最近浏览")
             composeRule.onNode(hasSetTextAction()).performTextInput("Turnip")
-            waitForText("物品")
-            composeRule.onAllNodesWithText("物品")[1].performClick()
+            waitForText("萝卜")
+            assertTrue(composeRule.onAllNodesWithText("最近浏览").fetchSemanticsNodes().isEmpty())
+            assertTrue(composeRule.onAllNodesWithText("最近搜索").fetchSemanticsNodes().isEmpty())
+            composeRule.onNodeWithContentDescription("打开 萝卜").performClick()
             composeRule.runOnIdle { assertEquals("object:1", searchDetail) }
         } finally {
             scenario.close()

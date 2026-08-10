@@ -33,6 +33,8 @@ enum class SyntheticPackageFailure {
     InvalidJson,
     MissingDatabase,
     HashMismatch,
+    InvalidImage,
+    TransparentImage,
     MissingBuildMeta,
     MissingSearchIndex,
     MismatchedEntityCount,
@@ -60,7 +62,7 @@ class SyntheticDataPackageFactory(private val context: Context) {
         val root = File(fixtures, "wiki-fixture-${UUID.randomUUID()}")
         check(root.mkdirs()) { "无法创建测试数据包目录" }
         val database = createDatabase(root, variant, failure, searchStorage)
-        if (failure != SyntheticPackageFailure.MissingImage) writeImage(root)
+        if (failure != SyntheticPackageFailure.MissingImage) writeImage(root, failure)
         writeManifest(root, database, variant, failure)
         return SyntheticDataPackage(root).also { writeArchive(root, it.archive, failure) }
     }
@@ -168,10 +170,15 @@ class SyntheticDataPackageFactory(private val context: Context) {
         }
     }
 
-    private fun writeImage(root: File) {
+    private fun writeImage(root: File, failure: SyntheticPackageFailure?) {
         val image = File(root, IMAGE_FILE)
         image.parentFile?.mkdirs()
-        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(203, 123, 78)) }
+        if (failure == SyntheticPackageFailure.InvalidImage) {
+            image.writeBytes(byteArrayOf(0, 1, 2, 3))
+            return
+        }
+        val color = if (failure == SyntheticPackageFailure.TransparentImage) Color.TRANSPARENT else Color.rgb(203, 123, 78)
+        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
         image.outputStream().use { output ->
             @Suppress("DEPRECATION")
             check(bitmap.compress(Bitmap.CompressFormat.WEBP, 100, output)) { "无法写入 WebP 测试图片" }

@@ -1,5 +1,6 @@
 package com.example.stardewoffline.core.datapackage
 
+import android.graphics.BitmapFactory
 import com.example.stardewoffline.core.common.AppError
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.HashUtils
@@ -77,11 +78,35 @@ class DataPackageValidator @Inject constructor(
                 val imageFile = resolveInside(root, imagePath)
                     ?: return AppResult.Failure(AppError.UnsafeArchiveEntry(imagePath))
                 if (!imageFile.isFile) return AppResult.Failure(AppError.ImageMissing(imagePath))
+                validateImage(imageFile, imagePath)?.let { return AppResult.Failure(it) }
             }
             AppResult.Success(DataPackageInfo(manifest.database.sha256, manifest, meta, missingImageCount = 0))
         } finally {
             database.close()
             validationCopy.delete()
+        }
+    }
+
+    /**
+     * Rule: a declared image must decode and contain at least one visible pixel;
+     * an existing but blank file is still a broken publish artifact.
+     */
+    private fun validateImage(file: File, imagePath: String): AppError? {
+        val bitmap = BitmapFactory.decodeFile(file.path)
+            ?: return AppError.ImageInvalid(imagePath, "无法解码")
+        return try {
+            if (bitmap.width <= 0 || bitmap.height <= 0) {
+                AppError.ImageInvalid(imagePath, "尺寸无效")
+            } else {
+                val pixels = IntArray(bitmap.width)
+                val visible = (0 until bitmap.height).any { y ->
+                    bitmap.getPixels(pixels, 0, bitmap.width, 0, y, bitmap.width, 1)
+                    pixels.any { pixel -> pixel ushr 24 != 0 }
+                }
+                if (visible) null else AppError.ImageInvalid(imagePath, "内容完全透明")
+            }
+        } finally {
+            bitmap.recycle()
         }
     }
 

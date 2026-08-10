@@ -19,6 +19,7 @@ sealed interface AppError {
     data class PackageTooLarge(val detail: String) : AppError { override val message = "数据包过大：$detail" }
     data object ImportCancelled : AppError { override val message = "已取消导入" }
     data class ImageMissing(val imagePath: String) : AppError { override val message = "图片不存在：$imagePath" }
+    data class ImageInvalid(val imagePath: String, val detail: String) : AppError { override val message = "图片无效：$imagePath（$detail）" }
     data class JsonParseFailed(val detail: String) : AppError { override val message = "JSON 解析失败：$detail" }
     data class Unknown(val detail: String) : AppError { override val message = "发生未知错误：$detail" }
 }

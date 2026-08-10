@@ -135,6 +135,8 @@ class DataPackageLifecycleTest {
             SyntheticPackageFailure.QualityFailed -> error is AppError.QualityFailed
             SyntheticPackageFailure.InvalidJson, SyntheticPackageFailure.MissingDatabase -> error is AppError.InvalidManifest
             SyntheticPackageFailure.HashMismatch -> error is AppError.HashMismatch
+            SyntheticPackageFailure.InvalidImage,
+            SyntheticPackageFailure.TransparentImage -> error is AppError.ImageInvalid
             SyntheticPackageFailure.MetadataMismatch,
             SyntheticPackageFailure.MismatchedEntityCount -> error is AppError.MetadataMismatch
             SyntheticPackageFailure.MissingImage -> error is AppError.ImageMissing
