@@ -354,38 +354,82 @@ internal fun englishTitleForDisplay(title: String, englishTitle: String?): Strin
     englishTitle?.trim()?.takeIf { it.isNotEmpty() && !it.equals(title.trim(), ignoreCase = true) }
 
 object WikiCatalogueConfiguration {
-    private val configured = listOf(
-        ConfiguredCategory(id = "farm", title = "农场与物品", types = setOf("object", "crop", "big_craftable", "tool", "ring", "weapon", "footwear", "trinket"), cover = "cover-farm"),
-        ConfiguredCategory(id = "villagers", title = "村民", types = setOf("villager"), cover = "cover-world"),
-        ConfiguredCategory(id = "people", title = "世界与生物", types = setOf("monster", "fish", "mineral", "ginger_island"), cover = "cover-world"),
-        ConfiguredCategory(id = "activities", title = "活动与配方", types = setOf("achievement", "bundle", "quest", "special_order", "cooking_recipe", "crafting_recipe", "tailoring_recipe"), cover = "cover-activities"),
+    private val groups = listOf(
+        ConfiguredGroup(
+            id = "farm",
+            title = "农场经营",
+            types = listOf("object", "crop", "big_craftable", "tool", "furniture"),
+            cover = "cover-farm",
+        ),
+        ConfiguredGroup(
+            id = "community",
+            title = "人物与社区",
+            types = listOf("villager", "shop"),
+            cover = "cover-community",
+        ),
+        ConfiguredGroup(
+            id = "exploration",
+            title = "探索与战斗",
+            types = listOf("monster", "fish", "mineral", "drop", "weapon", "footwear", "ring", "trinket", "ginger_island"),
+            cover = "cover-world",
+        ),
+        ConfiguredGroup(
+            id = "missions",
+            title = "任务与收集",
+            types = listOf("achievement", "bundle", "quest", "special_order"),
+            cover = "cover-missions",
+        ),
+        ConfiguredGroup(
+            id = "crafting",
+            title = "料理与制作",
+            types = listOf("cooking_recipe", "crafting_recipe", "tailoring_recipe"),
+            cover = "cover-activities",
+        ),
     )
 
+    /**
+     * Guarantee: every browsable manifest type appears in exactly one catalogue section;
+     * unknown future types remain reachable under “其他资料”.
+     */
     fun sections(types: List<ManifestEntityType>): List<WikiSection> {
-        val available = types.filter { it.count > 0 }.associateBy(ManifestEntityType::id)
-        val featured = configured.mapNotNull { it.toWikiCategory(available) }
-        val all = available.values
-            .filterNot { it.id in SUPPORT_ENTITY_TYPES }
+        val available = types.filter { it.count > 0 && it.id !in SUPPORT_ENTITY_TYPES }.associateBy(ManifestEntityType::id)
+        val groupedTypeIds = groups.flatMap(ConfiguredGroup::types).toSet()
+        val majorCategories = groups.mapNotNull { it.toMajorCategory(available) }
+        val catalogueSections = groups.mapNotNull { it.toCatalogueSection(available) }.toMutableList()
+        val remaining = available.values
+            .filterNot { it.id in groupedTypeIds }
             .sortedBy(ManifestEntityType::displayName)
-            .map { type ->
-                WikiCategory("type:${type.id}", type.displayName, setOf(type.id), type.count, CategoryCover("type-${type.id}"))
-            }
-        return listOfNotNull(
-            featured.takeIf { it.isNotEmpty() }?.let { WikiSection("featured", "主题图鉴", it) },
-            WikiSection("all", "全部分类", all),
-        )
+            .map(::toTypeCategory)
+        if (remaining.isNotEmpty()) catalogueSections += WikiSection("catalogue-other", "其他资料", remaining)
+        return buildList {
+            if (majorCategories.isNotEmpty()) add(WikiSection("major", "大类导航", majorCategories))
+            addAll(catalogueSections)
+        }
     }
 
-    private data class ConfiguredCategory(
+    private fun toTypeCategory(type: ManifestEntityType) = WikiCategory(
+        id = "type:${type.id}",
+        title = type.displayName,
+        entityTypes = setOf(type.id),
+        entryCount = type.count,
+        cover = CategoryCover("type-${type.id}"),
+    )
+
+    private data class ConfiguredGroup(
         val id: String,
         val title: String,
-        val types: Set<String>,
+        val types: List<String>,
         val cover: String,
     ) {
-        fun toWikiCategory(available: Map<String, ManifestEntityType>): WikiCategory? {
+        fun toMajorCategory(available: Map<String, ManifestEntityType>): WikiCategory? {
             val visibleTypes = types.filterTo(linkedSetOf()) { it in available }
             if (visibleTypes.isEmpty()) return null
             return WikiCategory(id, title, visibleTypes, visibleTypes.sumOf { available.getValue(it).count }, CategoryCover(cover))
+        }
+
+        fun toCatalogueSection(available: Map<String, ManifestEntityType>): WikiSection? {
+            val categories = types.mapNotNull(available::get).map(::toTypeCategory)
+            return categories.takeIf(List<WikiCategory>::isNotEmpty)?.let { WikiSection("catalogue-$id", title, it) }
         }
     }
 }

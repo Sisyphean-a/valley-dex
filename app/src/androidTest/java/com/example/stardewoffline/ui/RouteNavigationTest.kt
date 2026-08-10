@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -79,7 +80,7 @@ class RouteNavigationTest {
             setRoute { HomeRoute(onCategory = { selected = it }, onDetail = {}, viewModel = viewModel) }
             composeRule.waitUntil(TIMEOUT) { composeRule.onAllNodesWithText("全部分类").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(composeRule.onAllNodesWithText("最近浏览").fetchSemanticsNodes().isEmpty())
-            composeRule.onNodeWithTag("home-category:type:crop").performClick()
+            composeRule.onNodeWithTag("home-category:type:crop").performScrollTo().performClick()
             composeRule.runOnIdle { assertEquals("type:crop", selected) }
         } finally {
             scenario.close()
