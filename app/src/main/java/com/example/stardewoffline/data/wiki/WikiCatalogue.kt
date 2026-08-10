@@ -10,6 +10,7 @@ import com.example.stardewoffline.core.model.CataloguePage
 import com.example.stardewoffline.core.model.CatalogueQuery
 import com.example.stardewoffline.core.model.CategoryCover
 import com.example.stardewoffline.core.model.DetailRelation
+import com.example.stardewoffline.core.model.EntityDetail
 import com.example.stardewoffline.core.model.EntryFact
 import com.example.stardewoffline.core.model.EntryImage
 import com.example.stardewoffline.core.model.EntryRelation
@@ -37,6 +38,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private val SUPPORT_ENTITY_TYPES = setOf("npc_schedule", "villager_gift")
+private val SELL_PRICE_FACT_LABELS = setOf("售价", "出售价格", "基础售价", "基础价格")
 
 interface WikiCatalogue {
     suspend fun sections(): AppResult<List<WikiSection>>
@@ -151,7 +153,9 @@ class DefaultWikiCatalogue @Inject constructor(
         typeLabel: String,
     ): AppResult<WikiEntry> {
         val presentation = DetailPresentationParser.present(entity)
-        val targets = relations.resolve(presentation.relationGroups.flatMap { it.relations })
+        val relationDefinitions = presentation.relationGroups.flatMap { it.relations }
+        val targets = if (entity.entityType == "shop") emptyMap() else relations.resolve(relationDefinitions)
+        val targetDetails = if (entity.entityType == "shop") relations.resolveDetails(relationDefinitions) else emptyMap()
         val aliases = content.aliases(id).getOrNull().orEmpty()
         val submenus = if (entity.entityType == "villager") {
             val sourceId = entity.id.substringAfter(':', entity.id)
@@ -179,7 +183,9 @@ class DefaultWikiCatalogue @Inject constructor(
                 image = entity.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
                 summary = entity.descriptionZh?.takeIf(String::isNotBlank) ?: entity.descriptionEn?.takeIf(String::isNotBlank),
                 sections = entrySections(presentation.facts, aliases),
-                relations = presentation.relationGroups.flatMap { group -> group.relations.map { toEntryRelation(group.title, it, targets) } },
+                relations = presentation.relationGroups.flatMap { group ->
+                    group.relations.mapNotNull { toEntryRelation(group.title, it, targets, targetDetails) }
+                },
                 submenus = submenus,
             ),
         )
@@ -301,12 +307,33 @@ class DefaultWikiCatalogue @Inject constructor(
         section: String,
         relation: DetailRelation,
         targets: Map<String, com.example.stardewoffline.core.model.EntitySummary>,
-    ): EntryRelation {
-        val target = targets[relation.targetId]?.let { RelationTarget.Entry(it.id, it.nameZh) }
+        targetDetails: Map<String, EntityDetail>,
+    ): EntryRelation? {
+        val resolvedTarget = targetDetails[relation.targetId]?.let(::entryTarget)
+            ?: targets[relation.targetId]?.let { summary ->
+                RelationTarget.Entry(
+                    id = summary.id,
+                    title = summary.nameZh,
+                    image = summary.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
+                )
+            }
+        // Rule: a shop card is useful only when its product resolves to a published entry.
+        // Failure: do not turn a purchase price into a fake product name or expose an empty offer.
+        if (section == "商品" && resolvedTarget == null) return null
+        val target = resolvedTarget
             ?: relation.details.firstOrNull()?.value?.takeIf(String::isNotBlank)?.let(RelationTarget::ReadableText)
             ?: RelationTarget.Unavailable("关联内容暂未收录")
         return EntryRelation(section, relation.label, relation.details.map(::toEntryFact), target)
     }
+
+    private fun entryTarget(entity: EntityDetail): RelationTarget.Entry = RelationTarget.Entry(
+        id = entity.id,
+        title = entity.nameZh,
+        image = entity.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
+        sellPrice = DetailPresentationParser.present(entity).facts
+            .firstOrNull { it.label in SELL_PRICE_FACT_LABELS }
+            ?.value,
+    )
 
     private fun <T> AppResult<T>.failure(): AppResult.Failure = this as AppResult.Failure
     private data class ActivePackage(val id: String, val types: List<ManifestEntityType>)

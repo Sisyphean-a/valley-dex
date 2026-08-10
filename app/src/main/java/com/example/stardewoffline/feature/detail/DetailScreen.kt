@@ -82,7 +82,7 @@ fun DetailScreen(
             items(entry.submenus, key = WikiEntrySubmenu::title) { submenu ->
                 EntrySubmenuCard(submenu, onDetail, Modifier.padding(horizontal = 20.dp))
             }
-            item { RelationSection(entry.relations, onDetail, Modifier.padding(horizontal = 20.dp)) }
+            item { RelationSection(entry.relations, state.packageRoot, onDetail, Modifier.padding(horizontal = 20.dp)) }
             item { NoteSection(note, onSaveNote, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
         }
     }
@@ -113,13 +113,15 @@ private fun DetailTopBar(name: String, favorite: Boolean, onBack: () -> Unit, on
 private fun DetailHeader(entry: WikiEntry, packageRoot: java.io.File?, modifier: Modifier) {
     Card(modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
         Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            EntityImage(
-                imagePath = entry.image.relativePath(),
-                packageRoot = packageRoot,
-                name = entry.title,
-                categoryLabel = entry.categoryLabel,
-                modifier = Modifier.size(108.dp),
-            )
+            entry.image.relativePath()?.let { imagePath ->
+                EntityImage(
+                    imagePath = imagePath,
+                    packageRoot = packageRoot,
+                    name = entry.title,
+                    categoryLabel = entry.categoryLabel,
+                    modifier = Modifier.size(108.dp),
+                )
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(entry.title, style = MaterialTheme.typography.headlineSmall)
                 entry.englishTitle?.takeUnless { it.trim().equals(entry.title.trim(), ignoreCase = true) }?.let {
@@ -220,25 +222,61 @@ private fun SubmenuItemRow(item: WikiEntrySubmenuItem, onDetail: (String) -> Uni
 }
 
 @Composable
-private fun RelationSection(relations: List<EntryRelation>, onDetail: (String) -> Unit, modifier: Modifier) {
+private fun RelationSection(
+    relations: List<EntryRelation>,
+    packageRoot: java.io.File?,
+    onDetail: (String) -> Unit,
+    modifier: Modifier,
+) {
     if (relations.isEmpty()) return
+    val grouped = relations.groupBy(EntryRelation::section)
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("关联")
-        relations.groupBy(EntryRelation::section).forEach { (section, group) ->
-            Text(section, style = MaterialTheme.typography.labelLarge)
-            group.forEach { relation -> RelationCard(relation, onDetail) }
+        if (grouped.size == 1) {
+            val (section, group) = grouped.entries.single()
+            SectionTitle(section)
+            group.forEach { relation -> RelationCard(relation, packageRoot, onDetail) }
+        } else {
+            SectionTitle("关联")
+            grouped.forEach { (section, group) ->
+                Text(section, style = MaterialTheme.typography.labelLarge)
+                group.forEach { relation -> RelationCard(relation, packageRoot, onDetail) }
+            }
         }
     }
 }
 
 @Composable
-private fun RelationCard(relation: EntryRelation, onDetail: (String) -> Unit) {
+private fun RelationCard(
+    relation: EntryRelation,
+    packageRoot: java.io.File?,
+    onDetail: (String) -> Unit,
+) {
     val entry = relation.target as? RelationTarget.Entry
+    val sellPrice = entry?.sellPrice
+        ?.takeIf { relation.section == "商品" && relation.label in setOf("商品", "随机商品") }
+        ?.let { EntryFact("出售价格", it) }
+    val details = relation.details + listOfNotNull(sellPrice)
     Card(Modifier.fillMaxWidth().then(if (entry == null) Modifier else Modifier.clickable { onDetail(entry.id) })) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(relation.label, style = MaterialTheme.typography.labelLarge)
-            Text(relation.target.displayText(), style = MaterialTheme.typography.titleMedium)
-            relation.details.forEach { FactRow(it) }
+        Row(
+            Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            entry?.image?.relativePath()?.let { imagePath ->
+                EntityImage(
+                    imagePath = imagePath,
+                    packageRoot = packageRoot,
+                    name = entry.title,
+                    modifier = Modifier.size(56.dp),
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (relation.label != relation.section) {
+                    Text(relation.label, style = MaterialTheme.typography.labelLarge)
+                }
+                Text(relation.target.displayText(), style = MaterialTheme.typography.titleMedium)
+                details.forEach { FactRow(it) }
+            }
         }
     }
 }

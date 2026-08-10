@@ -30,6 +30,7 @@ fun WikiEntryListItem(
     entry: WikiEntrySummary,
     packageRoot: File?,
     modifier: Modifier = Modifier,
+    showCategoryLabel: Boolean = true,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -38,17 +39,19 @@ fun WikiEntryListItem(
         tonalElevation = 1.dp,
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            EntityImage(
-                imagePath = entry.image.relativePath(),
-                packageRoot = packageRoot,
-                name = entry.title,
-                categoryLabel = entry.categoryLabel,
-                modifier = Modifier.size(56.dp),
-            )
+            entry.image.relativePath()?.let { imagePath ->
+                EntityImage(
+                    imagePath = imagePath,
+                    packageRoot = packageRoot,
+                    name = entry.title,
+                    categoryLabel = entry.categoryLabel,
+                    modifier = Modifier.size(56.dp),
+                )
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     entry.title,
@@ -59,7 +62,7 @@ fun WikiEntryListItem(
                 englishTitle(entry)?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                entry.categoryLabel.takeIf(String::isNotBlank)?.let {
+                entry.categoryLabel.takeIf { showCategoryLabel && it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -72,6 +75,7 @@ fun WikiEntryGridItem(
     entry: WikiEntrySummary,
     packageRoot: File?,
     modifier: Modifier = Modifier,
+    showCategoryLabel: Boolean = true,
     onClick: () -> Unit,
 ) {
     Card(
@@ -79,16 +83,18 @@ fun WikiEntryGridItem(
         modifier = modifier.fillMaxWidth().testTag("wiki-grid-card:${entry.id}").semantics { contentDescription = "打开 ${entry.title}" },
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            EntityImage(
-                imagePath = entry.image.relativePath(),
-                packageRoot = packageRoot,
-                name = entry.title,
-                categoryLabel = entry.categoryLabel,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-            )
+            entry.image.relativePath()?.let { imagePath ->
+                EntityImage(
+                    imagePath = imagePath,
+                    packageRoot = packageRoot,
+                    name = entry.title,
+                    categoryLabel = entry.categoryLabel,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                )
+            }
             Text(
                 entry.title,
                 style = MaterialTheme.typography.titleSmall,
@@ -98,7 +104,7 @@ fun WikiEntryGridItem(
             englishTitle(entry)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            entry.categoryLabel.takeIf(String::isNotBlank)?.let {
+            entry.categoryLabel.takeIf { showCategoryLabel && it.isNotBlank() }?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }

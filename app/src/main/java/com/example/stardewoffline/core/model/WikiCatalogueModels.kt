@@ -93,7 +93,12 @@ data class EntryRelation(
 )
 
 sealed interface RelationTarget {
-    data class Entry(val id: String, val title: String) : RelationTarget
+    data class Entry(
+        val id: String,
+        val title: String,
+        val image: EntryImage = EntryImage.Missing,
+        val sellPrice: String? = null,
+    ) : RelationTarget
     data class ReadableText(val value: String) : RelationTarget
     data class Unavailable(val message: String) : RelationTarget
 }

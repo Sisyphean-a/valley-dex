@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -86,7 +87,7 @@ class RouteNavigationTest {
     }
 
     @Test
-    fun typeListGridShowsImageEnglishNameAndCategory() = runBlocking {
+    fun typeListGridShowsImageAndEnglishName() = runBlocking {
         val scenario = readyScenario()
         try {
             var gridDetail: String? = null
@@ -102,10 +103,31 @@ class RouteNavigationTest {
             setRoute { TypeListRoute(onDetail = { gridDetail = it }, viewModel = viewModel) }
             waitForText("萝卜种子")
             waitForText("Turnip Seeds")
-            composeRule.onNodeWithText("作物").assertExists()
+            assertEquals(1, composeRule.onAllNodesWithText("作物").fetchSemanticsNodes().size)
             composeRule.onNodeWithContentDescription("萝卜种子").assertExists()
             composeRule.onNodeWithTag("wiki-grid-card:crop:1").performClick()
             composeRule.runOnIdle { assertEquals("crop:1", gridDetail) }
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun typeListWithoutImageOmitsPlaceholderAndDuplicateCategory() = runBlocking {
+        val scenario = readyScenario()
+        try {
+            val viewModel = provide(scenario) {
+                TypeListViewModel(
+                    saved = SavedStateHandle(mapOf("categoryId" to "type:fish")),
+                    catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
+                    content = scenario.contentRepository,
+                    preferences = scenario.preferences,
+                )
+            }
+            setRoute { TypeListRoute(onDetail = {}, viewModel = viewModel) }
+            waitForText("测试鱼")
+            assertTrue(composeRule.onAllNodesWithContentDescription("测试鱼 暂无图片").fetchSemanticsNodes().isEmpty())
+            assertEquals(1, composeRule.onAllNodesWithText("鱼类").fetchSemanticsNodes().size)
         } finally {
             scenario.close()
         }

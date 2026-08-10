@@ -78,8 +78,12 @@ class DetailPresentationParserTest {
         """))
         val offer = shop.relationGroups.single { it.title == "商品" }.relations.single()
         assertEquals("(O)472", offer.targetId)
-        assertTrue(offer.details.any { it.label == "价格" && it.value == "按物品基础价格" })
-        assertTrue(offer.details.any { it.label == "库存" && it.value == "不限库存，全局库存" })
+        assertTrue(offer.details.isEmpty())
+
+        val qiShop = DetailPresentationParser.present(entity("shop", """
+            {"Currency":4,"Items":[{"Id":"(O)472","ItemId":"(O)472","Price":12}]}
+        """))
+        assertEquals("12 齐币", qiShop.relationGroups.single().relations.single().details.single().value)
 
         val machine = DetailPresentationParser.present(entity("object", """
             {"officialDerived":{"machineUses":[{"machineId":"(BC)12","minutesUntilReady":6000,"daysUntilReady":-1,"outputs":[{"outputMethod":"StardewValley.Object, Stardew Valley: OutputSeedMaker","minStack":-1,"maxStack":-1,"quality":-1}]}]}}
@@ -87,6 +91,22 @@ class DetailPresentationParserTest {
         val use = machine.relationGroups.single { it.title == "机器用途" }.relations.single()
         assertTrue(use.details.any { it.label == "完成时间" && it.value == "4天 4小时" })
         assertTrue(use.details.any { it.label == "产出规则" && it.value == "1 条" })
+    }
+
+    @Test
+    fun hidesDynamicShopOffersWithoutPublishedItemReferences() {
+        val shop = DetailPresentationParser.present(entity("shop", """
+            {"Items":[
+                {"Id":"all-furniture","ItemId":"ALL_ITEMS (F)","Price":0},
+                {"Id":"wallpaper","ItemId":"(WP)MoreWalls:9","Price":0},
+                {"Id":"lost-items","ItemId":"ITEMS_LOST_ON_DEATH","Price":-1},
+                {"Id":"real-item","ItemId":"(O)472","Price":100}
+            ]}
+        """))
+
+        val offers = shop.relationGroups.single().relations
+        assertEquals(listOf("(O)472"), offers.mapNotNull { it.targetId })
+        assertEquals("100 金", offers.single().details.single().value)
     }
 
     @Test

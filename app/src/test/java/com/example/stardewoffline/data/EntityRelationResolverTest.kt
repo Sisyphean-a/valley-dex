@@ -12,6 +12,12 @@ class EntityRelationResolverTest {
     }
 
     @Test
+    fun probesNamedItemTypesForUnqualifiedShopReferences() {
+        assertTrue(relationCandidates("MixedFlowerSeeds").contains("object:MixedFlowerSeeds"))
+        assertTrue(relationCandidates("SamsSkateboard").contains("furniture:SamsSkateboard"))
+    }
+
+    @Test
     fun keepsQualifiedEntitiesAndProbesUnqualifiedNumericIds() {
         assertEquals(listOf("cooking_recipe:Maki-Roll"), relationCandidates("cooking_recipe:Maki-Roll"))
         assertTrue(relationCandidates("24").take(4).containsAll(listOf("object:24", "crop:24")))

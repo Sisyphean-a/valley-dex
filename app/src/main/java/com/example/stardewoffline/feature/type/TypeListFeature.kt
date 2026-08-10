@@ -187,7 +187,12 @@ private fun CatalogueContent(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(page.entries, key = { it.id }) { entry ->
-                    WikiEntryListItem(entry, root, onClick = { onDetail(entry.id) })
+                    WikiEntryListItem(
+                        entry = entry,
+                        packageRoot = root,
+                        showCategoryLabel = entry.categoryLabel != page.category.title,
+                        onClick = { onDetail(entry.id) },
+                    )
                 }
             }
         } else {
@@ -199,7 +204,12 @@ private fun CatalogueContent(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(page.entries, key = { it.id }) { entry ->
-                    WikiEntryGridItem(entry, root, onClick = { onDetail(entry.id) })
+                    WikiEntryGridItem(
+                        entry = entry,
+                        packageRoot = root,
+                        showCategoryLabel = entry.categoryLabel != page.category.title,
+                        onClick = { onDetail(entry.id) },
+                    )
                 }
             }
         }

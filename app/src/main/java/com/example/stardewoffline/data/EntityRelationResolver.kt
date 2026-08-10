@@ -2,6 +2,7 @@ package com.example.stardewoffline.data
 
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.model.DetailRelation
+import com.example.stardewoffline.core.model.EntityDetail
 import com.example.stardewoffline.core.model.EntitySummary
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -11,13 +12,23 @@ class EntityRelationResolver @Inject constructor(
     private val content: ContentRepository,
 ) {
     suspend fun resolve(relations: List<DetailRelation>): Map<String, EntitySummary> {
-        val candidates = relations.mapNotNull(DetailRelation::targetId)
-            .associateWith(::relationCandidates)
+        val candidates = candidatesFor(relations)
         val summaries = content.summaries(candidates.values.flatten().distinct()).getOrNull().orEmpty()
         return candidates.mapNotNull { (rawId, ids) ->
             ids.firstNotNullOfOrNull(summaries::get)?.let { rawId to it }
         }.toMap()
     }
+
+    suspend fun resolveDetails(relations: List<DetailRelation>): Map<String, EntityDetail> {
+        val candidates = candidatesFor(relations)
+        val details = content.detailsByIds(candidates.values.flatten().distinct()).getOrNull().orEmpty().associateBy(EntityDetail::id)
+        return candidates.mapNotNull { (rawId, ids) ->
+            ids.firstNotNullOfOrNull(details::get)?.let { rawId to it }
+        }.toMap()
+    }
+
+    private fun candidatesFor(relations: List<DetailRelation>): Map<String, List<String>> =
+        relations.mapNotNull(DetailRelation::targetId).associateWith(::relationCandidates)
 
 }
 
@@ -41,4 +52,21 @@ private val ITEM_TYPES = mapOf(
     "T" to "tool", "TR" to "trinket", "W" to "weapon", "B" to "footwear",
 )
 private val NUMERIC_TYPES = listOf("object", "mineral", "ring", "crop", "fish", "weapon", "footwear")
-private val NAMED_TYPES = listOf("villager", "monster", "shop", "tool", "weapon", "cooking_recipe", "crafting_recipe")
+private val NAMED_TYPES = listOf(
+    "object",
+    "mineral",
+    "ring",
+    "crop",
+    "fish",
+    "big_craftable",
+    "furniture",
+    "footwear",
+    "trinket",
+    "villager",
+    "monster",
+    "shop",
+    "tool",
+    "weapon",
+    "cooking_recipe",
+    "crafting_recipe",
+)

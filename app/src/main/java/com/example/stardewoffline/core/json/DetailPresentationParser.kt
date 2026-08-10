@@ -44,7 +44,7 @@ object DetailPresentationParser {
         "monster" -> monsterFacts(raw)
         "drop" -> dropFacts(raw)
         "achievement" -> achievementFacts(raw)
-        "shop" -> shopFacts(raw)
+        "shop" -> emptyList()
         "quest" -> questFacts(raw)
         "special_order" -> specialOrderFacts(raw)
         "bundle" -> bundleFacts(raw)
@@ -228,17 +228,6 @@ object DetailPresentationParser {
         )
     }
 
-    private fun shopFacts(raw: JsonObject): List<DetailFact> {
-        if (!isStructuredShop(raw)) return emptyList()
-        return listOfNotNull(
-            raw.fact("Currency", "货币") { DetailFormatters.currency(it.contentOrNull ?: "") },
-            raw.fact("PriceModifierMode", "价格修正方式") { modifierMode(it.contentOrNull ?: "") },
-            raw.fact("ApplyProfitMargins", "应用利润率") { DetailFormatters.booleanText(it.contentOrNull ?: "") },
-            raw.fact("StackSizeVisibility", "堆叠数量显示") { it.contentOrNull },
-            raw.array("Items").takeIf { it.isNotEmpty() }?.let { DetailFact("商品数量", "${it.size} 项") },
-        )
-    }
-
     private fun questFacts(raw: JsonObject): List<DetailFact> {
         val fields = legacyFields(raw, "quest")
         return listOfNotNull(
@@ -389,20 +378,16 @@ object DetailPresentationParser {
             val random = offer.array("RandomItemId").texts().ifEmpty {
                 offer.string("RandomItemId")?.let(::listOf).orEmpty()
             }
-            val details = offerDetails(offer)
+            val details = offerDetails(offer, raw.string("Currency"))
             when {
                 isResolvableItemReference(fixed) -> add(DetailRelation("商品", fixed, details))
                 random.any(::isResolvableItemReference) -> random.filter(::isResolvableItemReference).forEach { id ->
                     add(DetailRelation("随机商品", id, details))
                 }
-                else -> add(DetailRelation("商品", null, details + DetailFact("商品类型", "随机商品池")))
             }
             offer.string("TradeItemId")?.let { trade ->
                 if (isResolvableItemReference(trade)) add(DetailRelation("兑换材料", trade, listOfNotNull(offer.fact("TradeItemAmount", "数量") { DetailFormatters.integer(it.contentOrNull ?: "") })))
             }
-        }
-        raw.array("Owners").mapNotNull { it.asObject()?.string("Name") ?: it.asPrimitive()?.contentOrNull }.forEach { owner ->
-            add(DetailRelation("店主", "villager:$owner"))
         }
     })
     }
@@ -647,37 +632,18 @@ object DetailPresentationParser {
         }
     }
 
-    private fun offerDetails(offer: JsonObject): List<DetailFact> = listOfNotNull(
-        offer.stringAny("currency", "Currency")?.let { DetailFact("货币", DetailFormatters.currency(it) ?: it) },
-        offer.stringAny("price", "Price")?.let { DetailFact("价格", price(it)) },
-        offer.stringAny("tradeItemAmount", "TradeItemAmount")?.toIntOrNull()?.takeIf { it > 0 }?.let { DetailFact("兑换数量", it.toString()) },
-        stockFact(offer),
-        stackFact(offer, "minStack", "maxStack", "购买数量"),
-        offer.stringAny("quality", "Quality")?.let { DetailFact("品质", DetailFormatters.quality(it) ?: it) },
-        offer.stringAny("isRecipe", "IsRecipe")?.let { DetailFact("商品是配方", DetailFormatters.booleanText(it) ?: it) },
-        offer.stringAny("useObjectDataPrice", "UseObjectDataPrice")?.let { DetailFact("使用物品基础价格", DetailFormatters.booleanText(it) ?: it) },
-        offer.stringAny("ignoreShopPriceModifiers", "IgnoreShopPriceModifiers")?.let { DetailFact("忽略商店价格修正", DetailFormatters.booleanText(it) ?: it) },
-        offer.stringAny("avoidRepeat", "AvoidRepeat")?.let { DetailFact("避免重复商品", DetailFormatters.booleanText(it) ?: it) },
-        offer.stringAny("toolUpgradeLevel", "ToolUpgradeLevel")?.toIntOrNull()?.takeIf { it >= 0 }?.let { DetailFact("工具升级等级", "第 ${it} 级") },
-        offer.stringAny("maxItems", "MaxItems")?.toIntOrNull()?.takeIf { it >= 0 }?.let { DetailFact("最大商品数", it.toString()) },
-        offer.stringAny("priceModifierMode", "PriceModifierMode")?.let { DetailFact("价格修正规则", modifierMode(it)) },
-        offer.stringAny("availableStockModifierMode", "AvailableStockModifierMode")?.let { DetailFact("库存修正规则", modifierMode(it)) },
-        offer.stringAny("stackModifierMode", "StackModifierMode")?.let { DetailFact("堆叠修正规则", modifierMode(it)) },
-        offer.stringAny("qualityModifierMode", "QualityModifierMode")?.let { DetailFact("品质修正规则", modifierMode(it)) },
-        offer.stringAny("condition", "Condition")?.let { DetailFormatters.condition(it)?.let { value -> DetailFact("条件", value) } },
-        offer.stringAny("perItemCondition", "PerItemCondition")?.let { DetailFormatters.condition(it)?.let { value -> DetailFact("每件条件", value) } },
-        offer.arrayAny("shopPriceModifiers", "ShopPriceModifiers").takeIf { it.isNotEmpty() }?.let { DetailFact("商店价格规则", "${it.size} 条") },
-        offer.arrayAny("priceModifiers", "PriceModifiers").takeIf { it.isNotEmpty() }?.let { DetailFact("商品价格规则", "${it.size} 条") },
-        offer.arrayAny("availableStockModifiers", "AvailableStockModifiers").takeIf { it.isNotEmpty() }?.let { DetailFact("库存规则", "${it.size} 条") },
-        offer.arrayAny("stackModifiers", "StackModifiers").takeIf { it.isNotEmpty() }?.let { DetailFact("堆叠规则", "${it.size} 条") },
-        offer.arrayAny("qualityModifiers", "QualityModifiers").takeIf { it.isNotEmpty() }?.let { DetailFact("品质规则", "${it.size} 条") },
-    )
+    private fun offerDetails(offer: JsonObject, defaultCurrency: String? = null): List<DetailFact> {
+        val value = offer.stringAny("price", "Price") ?: return emptyList()
+        if (value.toIntOrNull() == -1) return emptyList()
+        return listOf(DetailFact("购买价格", purchasePrice(offer, value, defaultCurrency)))
+    }
 
-    private fun stockFact(offer: JsonObject): DetailFact? {
-        val value = offer.stringAny("availableStock", "AvailableStock") ?: return null
-        val stock = if (value == "-1") "不限库存" else DetailFormatters.integer(value) ?: value
-        val limit = offer.stringAny("availableStockLimit", "AvailableStockLimit")?.let { stockLimit(it) }
-        return DetailFact("库存", listOfNotNull(stock, limit).joinToString("，"))
+    private fun purchasePrice(offer: JsonObject, value: String, defaultCurrency: String?): String {
+        val currency = (offer.stringAny("currency", "Currency") ?: defaultCurrency)
+            ?.let(DetailFormatters::currency)
+        if (currency.isNullOrBlank() || currency == "金币") return DetailFormatters.gold(value) ?: value
+        val formatted = DetailFormatters.formatNumber(value) ?: value
+        return "$formatted $currency"
     }
 
     private fun rangeFact(raw: JsonObject, minKey: String, maxKey: String, label: String): DetailFact? {
@@ -887,20 +853,6 @@ object DetailPresentationParser {
         else -> value
     }
 
-    private fun price(value: String): String = if (value == "-1") "按物品基础价格" else DetailFormatters.gold(value) ?: value
-
-    private fun stockLimit(value: String): String = when (value.lowercase()) {
-        "global" -> "全局库存"
-        "player" -> "每位玩家独立库存"
-        else -> value
-    }
-
-    private fun modifierMode(value: String): String = when (value.lowercase()) {
-        "stack" -> "叠加"
-        "minimum" -> "取较小值"
-        "maximum" -> "取较大值"
-        else -> value
-    }
 
     private fun durationName(value: String): String = when (value.lowercase()) {
         "day", "days", "oneday" -> "一天"
@@ -1023,9 +975,26 @@ object DetailPresentationParser {
 
     private fun isResolvableItemReference(value: String?): Boolean {
         val item = value?.trim().orEmpty()
-        if (item.isBlank() || item.contains("FLAVORED_ITEM", true) || item.contains("DROP_IN", true) || item.contains("NEARBY_FLOWER", true)) return false
-        return item.matches(Regex("(?:\\([A-Z]+\\))?[-A-Za-z0-9_:.]+"))
+        if (
+            item.isBlank() ||
+            item.contains("FLAVORED_ITEM", true) ||
+            item.contains("DROP_IN", true) ||
+            item.contains("NEARBY_FLOWER", true) ||
+            item.startsWith("ALL_ITEMS", true) ||
+            item.startsWith("RANDOM_ITEMS", true) ||
+            item.startsWith("ITEMS_", true) ||
+            item.startsWith("MONSTER_SLAYER_REWARDS", true) ||
+            item.startsWith("TOOL_UPGRADES", true) ||
+            item.startsWith("MOVIE_CONCESSIONS", true) ||
+            item.startsWith("PET_ADOPTION", true) ||
+            item.startsWith("LOST_UNIQUE_ITEMS", true) ||
+            item.startsWith("DISH_OF_THE_DAY", true)
+        ) return false
+        return item.matches(SUPPORTED_ITEM_REFERENCE) || item.matches(UNPREFIXED_ITEM_REFERENCE)
     }
+
+    private val SUPPORTED_ITEM_REFERENCE = Regex("\\((O|BC|F|T|TR|W|B)\\).+")
+    private val UNPREFIXED_ITEM_REFERENCE = Regex("[A-Za-z0-9_.:-]+")
 
     private fun JsonObject.relation(key: String, label: String) = string(key)?.let { DetailRelation(label, it) }
 
