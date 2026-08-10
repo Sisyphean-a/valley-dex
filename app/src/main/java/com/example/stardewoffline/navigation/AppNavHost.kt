@@ -61,7 +61,12 @@ fun AppNavHost() {
                 )
             }
             composable("search") { SearchRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
-            composable("catalogue/{categoryId}") { TypeListRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
+            composable("catalogue/{categoryId}") {
+                TypeListRoute(
+                    onDetail = { nav.navigate(detailRoute(it)) },
+                    onBack = { nav.popBackStack() },
+                )
+            }
             composable("detail/{id}") { DetailRoute(onBack = nav::popBackStack, onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("favorites") { FavoritesRoute(onDetail = { nav.navigate(detailRoute(it)) }) }
             composable("more") { MoreRoute(
@@ -69,7 +74,7 @@ fun AppNavHost() {
                 onSettings = { nav.navigate("settings") }, onAbout = { nav.navigate("about") }, onLicenses = { nav.navigate("licenses") },
             ) }
             composable("history") { HistoryRoute(nav::popBackStack, onDetail = { nav.navigate(detailRoute(it)) }) }
-            composable("settings") { SettingsRoute() }
+            composable("settings") { SettingsRoute(onBack = nav::popBackStack) }
             composable("data") { DataManagementRoute(nav::popBackStack) }
             composable("about") { AboutRoute(nav::popBackStack) }
             composable("licenses") { LicensesRoute(nav::popBackStack) }

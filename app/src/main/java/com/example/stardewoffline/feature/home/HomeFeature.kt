@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Category
@@ -80,7 +80,6 @@ import kotlinx.coroutines.launch
 private val ValleyGreen = Color(0xFF163F37)
 private val ValleyGreenSoft = Color(0xFFE1EEE7)
 private val ValleyGold = Color(0xFFE1AD4B)
-private val ValleyCream = Color(0xFFF5F1E7)
 private val ValleyLine = Color(0xFFDED8CB)
 private val ValleyMuted = Color(0xFF697873)
 
@@ -126,7 +125,7 @@ private fun HomeContent(
     val totalEntries = allCategories.sumOf(WikiCategory::entryCount)
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(ValleyCream),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
@@ -196,7 +195,7 @@ private fun SectionHeading(title: String, meta: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-        Text(meta, style = MaterialTheme.typography.bodySmall, color = ValleyMuted)
+        Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -218,7 +217,7 @@ private fun QuickAccess(categories: List<WikiCategory>, onCategory: (String) -> 
                 ) {
                     Icon(categoryIcon(category), contentDescription = null, tint = if (index % 2 == 0) ValleyGold else ValleyGreen, modifier = Modifier.size(28.dp))
                     Text(category.title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text("${category.entryCount} 条", style = MaterialTheme.typography.labelSmall, color = ValleyMuted)
+                    Text("${category.entryCount} 条", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -252,7 +251,7 @@ private fun MajorCategoryCard(category: WikiCategory, modifier: Modifier, onCate
                 Icon(categoryIcon(category), contentDescription = null, tint = ValleyGreen, modifier = Modifier.padding(10.dp))
             }
             Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Text("${category.entityTypes.size} 类 · ${category.entryCount} 条", style = MaterialTheme.typography.bodySmall, color = ValleyMuted)
+            Text("${category.entityTypes.size} 类 · ${category.entryCount} 条", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -264,8 +263,8 @@ private fun CatalogueHeading(section: WikiSection) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = ValleyGreen)
-        Text("${section.categories.size} 类", style = MaterialTheme.typography.labelMedium, color = ValleyMuted)
+        Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text("${section.categories.size} 类", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -302,9 +301,9 @@ private fun CategoryCard(category: WikiCategory, modifier: Modifier, onCategory:
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(category.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${category.entryCount} 个条目", style = MaterialTheme.typography.bodySmall, color = ValleyMuted)
+                Text("${category.entryCount} 个条目", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("›", style = MaterialTheme.typography.titleLarge, color = Color(0xFFA4ACA8))
+            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -315,7 +314,7 @@ private fun categoryIcon(category: WikiCategory): ImageVector {
         "farm" -> Icons.Filled.Grass
         "community" -> Icons.Filled.People
         "exploration" -> Icons.Filled.Public
-        "missions" -> Icons.Filled.Assignment
+        "missions" -> Icons.AutoMirrored.Filled.Assignment
         "crafting" -> Icons.Filled.Handyman
         "object" -> Icons.Filled.Inventory2
         "crop" -> Icons.Filled.Grass
@@ -335,7 +334,7 @@ private fun categoryIcon(category: WikiCategory): ImageVector {
         "ginger_island" -> Icons.Filled.Public
         "achievement" -> Icons.Filled.EmojiEvents
         "bundle" -> Icons.Filled.Inventory2
-        "quest" -> Icons.Filled.Assignment
+        "quest" -> Icons.AutoMirrored.Filled.Assignment
         "special_order" -> Icons.Filled.TaskAlt
         "cooking_recipe" -> Icons.Filled.Restaurant
         "crafting_recipe" -> Icons.Filled.Handyman

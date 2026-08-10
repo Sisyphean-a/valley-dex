@@ -1,10 +1,14 @@
 package com.example.stardewoffline.feature.favorites
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -13,6 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -21,6 +26,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -90,11 +97,36 @@ private fun FavoritesScreen(rows: List<FavoriteRow>, root: File?, onDetail: (Str
         val title = row.entry?.title.orEmpty()
         (row.entry == null || title.contains(query, ignoreCase = true)) && (types.isEmpty() || row.entry?.categoryLabel in types)
     }
-    LazyColumn(Modifier.fillMaxSize()) {
-        item { OutlinedTextField(query, { query = it }, Modifier.padding(16.dp), label = { Text("筛选收藏") }, singleLine = true) }
-        item { knownTypes.forEach { type -> FilterChip(type in types, { types = types.toMutableSet().apply { if (!add(type)) remove(type) } }, { Text(type) }) } }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        item {
+            Column(Modifier.fillMaxWidth().background(Color(0xFF163F37)).padding(start = 20.dp, top = 28.dp, end = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("我的收藏", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.ExtraBold)
+                Text("${rows.size} 条已保存资料", style = MaterialTheme.typography.bodySmall, color = Color(0xFFC7D8D1))
+                OutlinedTextField(
+                    query,
+                    { query = it },
+                    Modifier.fillMaxWidth(),
+                    label = { Text("筛选收藏") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            }
+        }
+        if (knownTypes.isNotEmpty()) item {
+            LazyRow(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                items(knownTypes) { type -> FilterChip(type in types, { types = types.toMutableSet().apply { if (!add(type)) remove(type) } }, { Text(type) }) }
+            }
+        }
+        if (visible.isEmpty()) item { Text("还没有符合条件的收藏", Modifier.padding(horizontal = 20.dp, vertical = 24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(visible, key = { it.record.entityId }) { row ->
-            row.entry?.let { entry -> WikiEntryListItem(entry, root, onClick = { onDetail(entry.id) }) }
+            row.entry?.let { entry -> WikiEntryListItem(entry, root, Modifier.padding(horizontal = 16.dp), onClick = { onDetail(entry.id) }) }
                 ?: MissingFavorite(row.record.entityId, onRemove)
         }
     }

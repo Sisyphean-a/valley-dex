@@ -18,6 +18,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.model.CatalogueDisplayMode
+import com.example.stardewoffline.core.model.EntryFact
+import com.example.stardewoffline.core.model.EntryImage
+import com.example.stardewoffline.core.model.EntrySection
+import com.example.stardewoffline.core.model.RelationTarget
+import com.example.stardewoffline.core.model.WikiEntry
+import com.example.stardewoffline.core.model.WikiEntrySubmenu
+import com.example.stardewoffline.core.model.WikiEntrySubmenuGroup
+import com.example.stardewoffline.core.model.WikiEntrySubmenuItem
 import com.example.stardewoffline.core.datastore.AppPreferences
 import com.example.stardewoffline.core.ui.LocalAppPreferences
 import com.example.stardewoffline.core.ui.theme.StardewOfflineTheme
@@ -25,6 +33,8 @@ import com.example.stardewoffline.data.EntityRelationResolver
 import com.example.stardewoffline.feature.bootstrap.BootstrapRoute
 import com.example.stardewoffline.feature.bootstrap.BootstrapViewModel
 import com.example.stardewoffline.feature.detail.DetailRoute
+import com.example.stardewoffline.feature.detail.DetailScreen
+import com.example.stardewoffline.feature.detail.DetailUiState
 import com.example.stardewoffline.feature.detail.DetailViewModel
 import com.example.stardewoffline.feature.home.HomeRoute
 import com.example.stardewoffline.feature.home.HomeViewModel
@@ -85,6 +95,71 @@ class RouteNavigationTest {
         } finally {
             scenario.close()
         }
+    }
+
+    @Test
+    fun villagerListShowsDenseHeaderAndBackNavigation() = runBlocking {
+        val scenario = readyScenario()
+        try {
+            var backed = false
+            val viewModel = provide(scenario) {
+                TypeListViewModel(
+                    saved = SavedStateHandle(mapOf("categoryId" to "type:villager")),
+                    catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
+                    content = scenario.contentRepository,
+                    preferences = scenario.preferences,
+                )
+            }
+            setRoute { TypeListRoute(onDetail = {}, onBack = { backed = true }, viewModel = viewModel) }
+            waitForText("测试村民")
+            waitForText("1 条本地资料")
+            composeRule.onNodeWithContentDescription("返回").performClick()
+            composeRule.runOnIdle { assertTrue(backed) }
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun villagerDetailKeepsDenseFactsScheduleAndGiftInteractions() {
+        val entry = WikiEntry(
+            id = "villager:Alice",
+            title = "测试村民",
+            englishTitle = "Alice",
+            categoryLabel = "村民",
+            image = EntryImage.Missing,
+            summary = "住在鹈鹕镇的居民",
+            sections = listOf(EntrySection("基本资料", listOf(EntryFact("生日", "春季 4 日"), EntryFact("住址", "杂货店")))),
+            relations = emptyList(),
+            submenus = listOf(
+                WikiEntrySubmenu(
+                    "日程",
+                    "1 条季节/日期规则",
+                    listOf(
+                        WikiEntrySubmenuGroup(
+                            "春季",
+                            listOf(WikiEntrySubmenuItem("默认日程", listOf(EntryFact("时间", "09:00"), EntryFact("地点", "城镇")))),
+                        ),
+                    ),
+                ),
+                WikiEntrySubmenu(
+                    "礼物偏好",
+                    "1 项偏好",
+                    listOf(
+                        WikiEntrySubmenuGroup(
+                            "最爱",
+                            listOf(WikiEntrySubmenuItem("紫水晶", target = RelationTarget.Entry("object:74", "紫水晶"))),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        setRoute { DetailScreen(DetailUiState(entry = entry), favorite = false, note = "", onBack = {}, onFavorite = {}, onSaveNote = {}, onDetail = {}) }
+        composeRule.onNodeWithTag("detail-submenu-header:日程").performScrollTo().performClick()
+        composeRule.onNodeWithTag("detail-schedule-row:默认日程").assertExists()
+        composeRule.onNodeWithTag("detail-submenu-header:日程").performClick()
+        composeRule.onNodeWithTag("detail-submenu-header:礼物偏好").performScrollTo().performClick()
+        composeRule.onNodeWithTag("detail-gift-chip:最爱:紫水晶").assertExists()
     }
 
     @Test

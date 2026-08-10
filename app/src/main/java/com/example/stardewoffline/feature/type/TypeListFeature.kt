@@ -1,28 +1,44 @@
 package com.example.stardewoffline.feature.type
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -42,10 +58,10 @@ import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -101,7 +117,7 @@ class TypeListViewModel @Inject constructor(
 
     /**
      * Flow: only the latest keyword/category request can update the page.
-     * Failure: query errors stay visible instead of being converted into an empty Compose tree.
+     * Failure: query errors stay visible instead of becoming an empty Compose tree.
      */
     private fun reload(delayMillis: Long = 0) {
         reloadJob?.cancel()
@@ -141,16 +157,22 @@ class TypeListViewModel @Inject constructor(
 }
 
 @Composable
-fun TypeListRoute(onDetail: (String) -> Unit, viewModel: TypeListViewModel = hiltViewModel()) {
+fun TypeListRoute(
+    onDetail: (String) -> Unit,
+    onBack: () -> Unit = {},
+    viewModel: TypeListViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsState()
     val root by viewModel.root.collectAsState()
     val page = state.page
     when {
-        page != null -> CatalogueContent(page, state, root, onDetail, viewModel::updateKeyword, viewModel::selectEntryCategory, viewModel::setDisplayMode)
-        state.isLoading -> CatalogueLoading()
-        else -> CatalogueError(state.error ?: "无法加载分类", viewModel::retry)
+        page != null -> CatalogueContent(page, state, root, onDetail, onBack, viewModel::updateKeyword, viewModel::selectEntryCategory, viewModel::setDisplayMode)
+        state.isLoading -> CatalogueLoading(onBack)
+        else -> CatalogueError(state.error ?: "无法加载分类", onBack, viewModel::retry)
     }
 }
+
+private val CatalogueGreen = Color(0xFF163F37)
 
 @Composable
 private fun CatalogueContent(
@@ -158,39 +180,72 @@ private fun CatalogueContent(
     state: CatalogueUiState,
     root: File?,
     onDetail: (String) -> Unit,
+    onBack: () -> Unit,
     onKeywordChange: (String) -> Unit,
     onSelectEntryCategory: (String?) -> Unit,
     onDisplayMode: (CatalogueDisplayMode) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        Text(
-            page.category.title,
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        OutlinedTextField(
-            value = state.keyword,
-            onValueChange = onKeywordChange,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).semantics { contentDescription = TYPE_LIST_SEARCH_FIELD_DESCRIPTION },
-            label = { Text("在此分类中搜索") },
-            singleLine = true,
-        )
+        Surface(color = CatalogueGreen, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(start = 12.dp, end = 20.dp, top = 12.dp, bottom = 18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(page.category.title, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                        Text(
+                            if (page.category.entityTypes.size == 1) "${page.category.entryCount} 条本地资料" else "${page.category.entityTypes.size} 个类型 · ${page.category.entryCount} 条资料",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFC7D8D1),
+                        )
+                    }
+                    Surface(color = Color(0xFF2A544B), shape = MaterialTheme.shapes.medium) {
+                        Text("离线", modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium, color = Color(0xFFE1EEE7))
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = state.keyword,
+                    onValueChange = onKeywordChange,
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = TYPE_LIST_SEARCH_FIELD_DESCRIPTION },
+                    label = { Text("搜索本分类") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("显示 ${state.page?.entries?.size ?: 0} 条结果", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            DisplayModeSwitch(state.displayMode, onDisplayMode)
+        }
         CategoryFilters(page, state.selectedEntryCategory, onSelectEntryCategory)
-        DisplayModeSwitch(state.displayMode, onDisplayMode)
-        if (state.displayMode == CatalogueDisplayMode.List) {
+        if (page.entries.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text("当前条件下没有匹配条目", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else if (state.displayMode == CatalogueDisplayMode.List) {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 items(page.entries, key = { it.id }) { entry ->
                     WikiEntryListItem(
                         entry = entry,
                         packageRoot = root,
-                        showCategoryLabel = entry.categoryLabel != page.category.title,
+                        showCategoryLabel = page.category.entityTypes.size > 1,
                         onClick = { onDetail(entry.id) },
                     )
                 }
@@ -199,15 +254,15 @@ private fun CatalogueContent(
             LazyVerticalGrid(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(page.entries, key = { it.id }) { entry ->
                     WikiEntryGridItem(
                         entry = entry,
                         packageRoot = root,
-                        showCategoryLabel = entry.categoryLabel != page.category.title,
+                        showCategoryLabel = page.category.entityTypes.size > 1,
                         onClick = { onDetail(entry.id) },
                     )
                 }
@@ -217,40 +272,46 @@ private fun CatalogueContent(
 }
 
 @Composable
-private fun CatalogueLoading() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        CircularProgressIndicator()
-        Text("正在加载分类", modifier = Modifier.padding(top = 16.dp))
+private fun CatalogueLoading(onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        CatalogueStateHeader("正在加载分类", onBack)
+        Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Text("正在读取本地资料", modifier = Modifier.padding(top = 16.dp))
+        }
     }
 }
 
 @Composable
-private fun CatalogueError(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("无法加载分类", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.error)
-        Text(message, modifier = Modifier.padding(top = 12.dp))
-        Button(onClick = onRetry, modifier = Modifier.padding(top = 24.dp)) { Text("重试") }
+private fun CatalogueError(message: String, onBack: () -> Unit, onRetry: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        CatalogueStateHeader("无法加载分类", onBack)
+        Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(message, color = MaterialTheme.colorScheme.error)
+            Button(onClick = onRetry, modifier = Modifier.padding(top = 24.dp)) { Text("重试") }
+        }
+    }
+}
+
+@Composable
+private fun CatalogueStateHeader(title: String, onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
     }
 }
 
 @Composable
 private fun CategoryFilters(page: CataloguePage, selected: String?, onSelect: (String?) -> Unit) {
-    if (page.availableEntryCategories.isEmpty()) return
+    val categories = page.availableEntryCategories.filterNot { page.category.entityTypes.size == 1 && it == page.category.title }
+    if (categories.isEmpty()) return
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        contentPadding = PaddingValues(vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         item { FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text("全部") }) }
-        items(page.availableEntryCategories) { category ->
+        items(categories) { category ->
             FilterChip(selected = selected == category, onClick = { onSelect(category) }, label = { Text(category) })
         }
     }
@@ -260,12 +321,8 @@ private const val TYPE_LIST_SEARCH_FIELD_DESCRIPTION = "分类搜索输入框"
 
 @Composable
 private fun DisplayModeSwitch(mode: CatalogueDisplayMode, onSelect: (CatalogueDisplayMode) -> Unit) {
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        contentPadding = PaddingValues(vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item { FilterChip(selected = mode == CatalogueDisplayMode.List, onClick = { onSelect(CatalogueDisplayMode.List) }, label = { Text("列表") }) }
-        item { FilterChip(selected = mode == CatalogueDisplayMode.Grid, onClick = { onSelect(CatalogueDisplayMode.Grid) }, label = { Text("网格") }) }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(selected = mode == CatalogueDisplayMode.List, onClick = { onSelect(CatalogueDisplayMode.List) }, label = { Text("列表") })
+        FilterChip(selected = mode == CatalogueDisplayMode.Grid, onClick = { onSelect(CatalogueDisplayMode.Grid) }, label = { Text("网格") })
     }
 }

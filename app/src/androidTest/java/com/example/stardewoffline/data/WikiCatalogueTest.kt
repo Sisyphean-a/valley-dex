@@ -26,7 +26,7 @@ class WikiCatalogueTest {
         try {
             val catalogue = catalogue(scenario)
             val sections = catalogue.sections().getOrNull() ?: error("目录不可用")
-            val all = sections.first { it.id == "all" }.categories
+            val all = sections.filter { it.id.startsWith("catalogue-") }.flatMap { it.categories }
             assertEquals(setOf("type:object", "type:crop", "type:fish", "type:villager"), all.map { it.id }.toSet())
             assertEquals("作物", all.first { it.id == "type:crop" }.title)
             assertTrue(all.all { it.title.isNotBlank() && it.entryCount > 0 })

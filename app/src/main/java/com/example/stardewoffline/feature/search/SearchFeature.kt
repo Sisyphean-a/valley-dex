@@ -1,19 +1,33 @@
 package com.example.stardewoffline.feature.search
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -131,35 +145,45 @@ private fun SearchScreen(
     onDetail: (String) -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 16.dp),
+        modifier = Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+        contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQuery,
-                modifier = Modifier.padding(16.dp).semantics { contentDescription = SEARCH_FIELD_DESCRIPTION },
-                label = { Text("搜索中文、英文、拼音或别名") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-            )
+            Surface(color = Color(0xFF163F37), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("搜索图鉴", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall, color = Color.White)
+                    Text("中文、英文、拼音和别名均可搜索", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = Color(0xFFC7D8D1))
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = onQuery,
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = SEARCH_FIELD_DESCRIPTION },
+                        label = { Text("搜索名称、地点或用途") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+                        ),
+                    )
+                }
+            }
         }
-        error?.let { message -> item { Text(message, modifier = Modifier.padding(horizontal = 16.dp)) } }
+        item {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (query.isBlank()) "输入关键词开始探索" else "找到 ${results.size} 条结果", style = androidx.compose.material3.MaterialTheme.typography.labelLarge, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                if (query.isNotBlank()) Text("离线检索", style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = Color(0xFF163F37))
+            }
+        }
+        error?.let { message -> item { Text(message, modifier = Modifier.padding(horizontal = 20.dp), color = Color(0xFFB3261E)) } }
         if (query.isNotBlank() && results.isEmpty() && error == null) {
-            item { Text("没有找到匹配条目", modifier = Modifier.padding(horizontal = 16.dp)) }
+            item { Text("没有找到匹配条目", modifier = Modifier.padding(horizontal = 20.dp)) }
         }
-        items(
-            items = results,
-            key = { it.entry.id },
-        ) { hit ->
-            WikiEntryListItem(
-                entry = hit.entry,
-                packageRoot = root,
-                modifier = Modifier.padding(horizontal = 16.dp),
-                onClick = { onDetail(hit.entry.id) },
-            )
+        items(results, key = { it.entry.id }) { hit ->
+            WikiEntryListItem(entry = hit.entry, packageRoot = root, modifier = Modifier.padding(horizontal = 16.dp), onClick = { onDetail(hit.entry.id) })
         }
     }
 }

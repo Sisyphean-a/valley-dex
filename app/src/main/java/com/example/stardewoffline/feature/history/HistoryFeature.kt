@@ -1,8 +1,11 @@
 package com.example.stardewoffline.feature.history
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -26,7 +30,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -92,8 +99,13 @@ private fun HistoryScreen(
     onClear: () -> Unit,
 ) {
     var confirmClear by rememberSaveable { mutableStateOf(false) }
-    Scaffold(topBar = { HistoryTopBar(onBack, rows.isNotEmpty()) { confirmClear = true } }) { padding ->
-        if (rows.isEmpty()) EmptyHistory(Modifier.padding(padding)) else LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = { HistoryTopBar(onBack, rows.isNotEmpty()) { confirmClear = true } }) { padding ->
+        if (rows.isEmpty()) EmptyHistory(Modifier.padding(padding)) else LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            item { Text("${rows.size} 条浏览记录", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) }
             items(rows, key = { it.record.entityId }) { row -> HistoryItem(row, onDetail, onDelete) }
         }
     }
@@ -113,14 +125,19 @@ private fun HistoryTopBar(onBack: () -> Unit, canClear: Boolean, onClear: () -> 
 @Composable
 private fun HistoryItem(row: HistoryRow, onDetail: (String) -> Unit, onDelete: (String) -> Unit) {
     val entry = row.entry
-    Column(
-        Modifier.fillMaxWidth().clickable(enabled = entry != null) { if (entry != null) onDetail(entry.id) }.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(enabled = entry != null) { if (entry != null) onDetail(entry.id) },
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
     ) {
-        Text(entry?.title ?: "当前数据包中已不存在", style = MaterialTheme.typography.titleMedium)
-        Text("${displayTime(row.record.lastViewedAt)} · 浏览 ${row.record.viewCount} 次", style = MaterialTheme.typography.bodySmall)
-        entry?.categoryLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
-        IconButton(onClick = { onDelete(row.record.entityId) }) { Icon(Icons.Filled.Delete, "删除历史记录") }
+        Row(Modifier.padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(entry?.title ?: "当前数据包中已不存在", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("${displayTime(row.record.lastViewedAt)} · 浏览 ${row.record.viewCount} 次", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                entry?.categoryLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+            }
+            IconButton(onClick = { onDelete(row.record.entityId) }) { Icon(Icons.Filled.Delete, "删除历史记录", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
     }
 }
 
