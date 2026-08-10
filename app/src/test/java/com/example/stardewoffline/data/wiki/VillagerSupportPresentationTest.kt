@@ -25,7 +25,7 @@ class VillagerSupportPresentationTest {
     }
 
     @Test
-    fun oneScheduleRecordKeepsAllTimesAndHidesMailToken() {
+    fun oneScheduleRecordKeepsOnlyTimeAndLocation() {
         val support = VillagerSupportPresentationBuilder.build(
             sourceId = "Abigail",
             schedules = listOf(entity("npc_schedule:Abigail:Wed", "npc_schedule", "[\"sunny\",\"MAIL internal_event_42\",\"GOTO spring\",\"GOTO NO_SCHEDULE\",\"GOTO Sun_normal\",\"a1200 Town 1 2\",\"1700 Saloon 3 4\"]")),
@@ -35,14 +35,9 @@ class VillagerSupportPresentationTest {
         assertEquals("通用日期", support.schedules.single().group)
         assertEquals("周三", support.schedules.single().label)
         val details = support.schedules.single().details
-        assertEquals(1, details.count { it.label == "日程条件" })
-        assertEquals(2, details.count { it.label == "时间" })
-        assertTrue(details.any { it.value == "触发游戏邮件" })
-        assertTrue(details.none { it.value.contains("internal_event_42") })
-        assertTrue(details.any { it.value == "跳转到：春季默认日程" })
-        assertTrue(details.any { it.value == "跳转到：无日程" })
-        assertTrue(details.any { it.value == "跳转到：周日常规日程" })
-        assertTrue(details.none { it.value.contains("NO_SCHEDULE") || it.value.contains("Sun_normal") })
+        assertEquals(listOf("时间", "地点", "时间", "地点"), details.map { it.label })
+        assertTrue(details.none { it.label == "坐标" || it.label == "日程条件" || it.label == "指令" })
+        assertTrue(details.none { it.value.contains("internal_event_42") || it.value.contains("NO_SCHEDULE") || it.value.contains("Sun_normal") })
     }
 
     @Test

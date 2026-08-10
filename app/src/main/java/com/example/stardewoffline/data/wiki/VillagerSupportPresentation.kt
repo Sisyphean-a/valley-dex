@@ -43,7 +43,7 @@ object VillagerSupportPresentationBuilder {
         val matchingSchedules = schedules.filter { matches(canonical, it, "npc_schedule") && !isTemplate(it) }
         val matchingGifts = gifts.filter { matches(canonical, it, "villager_gift") && !isTemplate(it) }
         return VillagerSupportPresentation(
-            schedules = matchingSchedules.map(::scheduleItem).sortedWith(
+            schedules = matchingSchedules.mapNotNull(::scheduleItem).sortedWith(
                 compareBy<VillagerScheduleItem> { scheduleGroupOrder[it.group] ?: Int.MAX_VALUE }.thenBy { it.order },
             ),
             gifts = giftLabels.associateWith { label ->
@@ -67,37 +67,20 @@ object VillagerSupportPresentationBuilder {
             .any { it.substringAfterLast('/').substringBeforeLast('.').equals("template", ignoreCase = true) }
     }
 
-    private fun scheduleItem(entity: EntityDetail): VillagerScheduleItem {
+    private fun scheduleItem(entity: EntityDetail): VillagerScheduleItem? {
         val fields = entity.extraJson.legacyFields()
-        val key = scheduleKey(entity)
-        val context = ScheduleKeyContext.parse(key)
-        val condition = fields.firstOrNull()?.takeUnless { isScheduleEntry(it) || isDirective(it) }
-        val conditionFact = condition?.let { DetailFact("日程条件", DetailFormatters.condition(it) ?: "受游戏条件限制") }
-        val directiveFacts = fields.filter(::isDirective).mapNotNull { directive ->
-            val parts = directive.split(Regex("\\s+"), limit = 2)
-            when (parts.firstOrNull()?.uppercase()) {
-                "MAIL" -> parts.getOrNull(1)?.let { DetailFact("指令", "触发游戏邮件") }
-                "GOTO" -> parts.getOrNull(1)?.let { DetailFact("指令", "跳转到：${DetailFormatters.scheduleRule(it)}") }
-                else -> null
-            }
-        }
+        val context = ScheduleKeyContext.parse(scheduleKey(entity))
         val entryFacts = fields.filter(::isScheduleEntry).flatMap { value ->
             val tokens = value.split(Regex("\\s+")).filter(String::isNotBlank)
             val time = scheduleTime(tokens.firstOrNull()) ?: return@flatMap emptyList()
             val location = tokens.getOrNull(1) ?: return@flatMap emptyList()
-            val x = tokens.getOrNull(2)?.toIntOrNull()
-            val y = tokens.getOrNull(3)?.toIntOrNull()
-            listOfNotNull(
+            listOf(
                 DetailFact("时间", DetailFormatters.gameTime(time)),
                 DetailFact("地点", DetailFormatters.location(location)),
-                if (x != null && y != null) DetailFact("坐标", "($x, $y)") else null,
             )
         }
-        val details = listOfNotNull(
-            context.description.takeIf(String::isNotBlank)?.let { DetailFact("适用范围", it) },
-            conditionFact,
-        ) + directiveFacts + entryFacts
-        return VillagerScheduleItem(context.group, context.order, context.label, details)
+        if (entryFacts.isEmpty()) return null
+        return VillagerScheduleItem(context.group, context.order, context.label, entryFacts)
     }
 
     private fun giftItems(entity: EntityDetail, groupIndex: Int): List<VillagerGiftItem> {
@@ -122,7 +105,6 @@ object VillagerSupportPresentationBuilder {
 
     private fun isScheduleEntry(value: String): Boolean = scheduleTime(value.split(Regex("\\s+")).firstOrNull()) != null
     private fun scheduleTime(value: String?): Int? = value?.removePrefix("a")?.toIntOrNull()
-    private fun isDirective(value: String): Boolean = value.startsWith("MAIL ") || value.startsWith("GOTO ")
     private fun isItemReference(value: String): Boolean =
         !value.contains("FLAVORED_ITEM", true) && !value.contains("DROP_IN", true) &&
             !value.contains("NEARBY_FLOWER", true) && value.matches(Regex("(?:\\([A-Z]+\\))?[-A-Za-z0-9_:.]+"))

@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.example.stardewoffline.core.model.EntryFact
@@ -194,10 +195,47 @@ private fun EntrySubmenuCard(submenu: WikiEntrySubmenu, onDetail: (String) -> Un
                                     )
                                 }
                             }
+                        } else if (submenu.title == "日程") {
+                            group.items.forEach { item -> ScheduleItemRow(item) }
                         } else {
                             group.items.forEach { item -> SubmenuItemRow(item, onDetail) }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleItemRow(item: WikiEntrySubmenuItem) {
+    val times = item.details.filter { it.label == "时间" }.map(EntryFact::value)
+    val locations = item.details.filter { it.label == "地点" }.map(EntryFact::value)
+    val stops = times.zip(locations)
+    Card(
+        modifier = Modifier.fillMaxWidth().testTag("detail-schedule-row:${item.label}"),
+    ) {
+        Column(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(item.label, style = MaterialTheme.typography.labelMedium)
+            stops.forEachIndexed { index, (time, location) ->
+                if (index > 0) {
+                    Text(
+                        "↓",
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(time, modifier = Modifier.weight(0.38f), style = MaterialTheme.typography.bodyLarge)
+                    Text(location, modifier = Modifier.weight(0.62f), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
