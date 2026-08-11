@@ -40,8 +40,6 @@ class AppPreferencesRepository @Inject constructor(
 
     suspend fun setSearchHistoryEnabled(value: Boolean) = edit { it[SEARCH_HISTORY_ENABLED] = value }
 
-    suspend fun setListLayoutMode(value: String) = edit { it[LIST_LAYOUT_MODE] = value }
-
     suspend fun update(block: (MutablePreferences) -> Unit) = context.appPreferencesDataStore.edit(block)
 
     private suspend fun edit(action: suspend (MutablePreferences) -> Unit) {
@@ -57,7 +55,6 @@ class AppPreferencesRepository @Inject constructor(
         showEnglishName = values[SHOW_ENGLISH_NAME] ?: true,
         showTechnicalFields = values[SHOW_TECHNICAL_FIELDS] ?: false,
         searchHistoryEnabled = values[SEARCH_HISTORY_ENABLED] ?: true,
-        listLayoutMode = values[LIST_LAYOUT_MODE] ?: "list",
     )
 
     private fun MutablePreferences.setOrRemove(key: Preferences.Key<String>, value: String?) {
@@ -73,6 +70,5 @@ class AppPreferencesRepository @Inject constructor(
         val SHOW_ENGLISH_NAME = booleanPreferencesKey("show_english_name")
         val SHOW_TECHNICAL_FIELDS = booleanPreferencesKey("show_technical_fields")
         val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
-        val LIST_LAYOUT_MODE = stringPreferencesKey("list_layout_mode")
     }
 }

@@ -33,7 +33,7 @@ fun LicensesRoute(onBack: () -> Unit) = StaticPage("开源许可", LICENSE_TEXT,
 @OptIn(ExperimentalMaterial3Api::class)
 private fun StaticPage(title: String, content: String, onBack: () -> Unit) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = {
-        TopAppBar(title = { Text(title) }, navigationIcon = {
+        TopAppBar(windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0), title = { Text(title) }, navigationIcon = {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") }
         })
     }) { padding ->

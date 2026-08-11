@@ -113,6 +113,7 @@ private fun DetailLoading(error: String?, onBack: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 private fun DetailTopBar(name: String, favorite: Boolean, onBack: () -> Unit, onFavorite: () -> Unit) {
     TopAppBar(
+        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         title = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
         actions = {

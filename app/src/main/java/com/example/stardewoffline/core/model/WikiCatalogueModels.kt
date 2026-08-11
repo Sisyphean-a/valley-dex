@@ -20,10 +20,7 @@ data class CatalogueQuery(
     val categoryId: String,
     val keyword: String? = null,
     val entryCategory: String? = null,
-    val displayMode: CatalogueDisplayMode = CatalogueDisplayMode.List,
 )
-
-enum class CatalogueDisplayMode { List, Grid }
 
 data class CataloguePage(
     val category: WikiCategory,
@@ -36,7 +33,7 @@ data class WikiEntrySummary(
     val title: String,
     val englishTitle: String?,
     val categoryLabel: String,
-    val filterCategory: String?,
+    val filterCategories: Set<String> = emptySet(),
     val image: EntryImage,
 )
 

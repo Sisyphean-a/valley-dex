@@ -117,9 +117,7 @@ private fun HomeContent(
     onCategory: (String) -> Unit,
     onSearch: () -> Unit,
 ) {
-    val major = sections.firstOrNull { it.id == "major" }?.categories.orEmpty()
-    val catalogues = sections.filter { it.id.startsWith("catalogue-") }
-    val allCategories = catalogues.flatMap(WikiSection::categories)
+    val allCategories = sections.flatMap(WikiSection::categories)
     val quickIds = listOf("crop", "quest", "shop", "villager")
     val quick = quickIds.mapNotNull { id -> allCategories.firstOrNull { it.id == "type:$id" } }
     val totalEntries = allCategories.sumOf(WikiCategory::entryCount)
@@ -134,18 +132,12 @@ private fun HomeContent(
             item { SectionHeading("快捷入口", "常用资料") }
             item { QuickAccess(quick, onCategory) }
         }
-        if (major.isNotEmpty()) {
-            item { SectionHeading("大类导航", "${major.size} 个主题") }
-            major.chunked(2).forEach { row ->
-                item(key = "major:${row.first().id}") { MajorCategoryRow(row, onCategory) }
-            }
-        }
-        if (catalogues.isNotEmpty()) {
+        if (allCategories.isNotEmpty()) {
             item { SectionHeading("全部分类", "${allCategories.size} 类 · $totalEntries 条") }
-            catalogues.forEach { section ->
+            sections.forEach { section ->
                 item(key = "heading:${section.id}") { CatalogueHeading(section) }
-                section.categories.chunked(2).forEach { row ->
-                    item(key = "row:${section.id}:${row.first().id}") { CategoryRow(row, onCategory) }
+                section.categories.chunked(4).forEach { row ->
+                    item(key = "row:${section.id}:${row.first().id}") { CategoryGridRow(row, onCategory) }
                 }
             }
         }
@@ -200,6 +192,18 @@ private fun SectionHeading(title: String, meta: String) {
 }
 
 @Composable
+private fun CatalogueHeading(section: WikiSection) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 14.dp, end = 20.dp, bottom = 5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text("${section.categories.size} 类", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
 private fun QuickAccess(categories: List<WikiCategory>, onCategory: (String) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -225,57 +229,13 @@ private fun QuickAccess(categories: List<WikiCategory>, onCategory: (String) -> 
 }
 
 @Composable
-private fun MajorCategoryRow(categories: List<WikiCategory>, onCategory: (String) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        categories.forEach { category -> MajorCategoryCard(category, Modifier.weight(1f), onCategory) }
-        if (categories.size == 1) Spacer(Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun MajorCategoryCard(category: WikiCategory, modifier: Modifier, onCategory: (String) -> Unit) {
-    Surface(
-        modifier = modifier
-            .testTag("home-category:${category.id}")
-            .semantics { contentDescription = "打开分类 ${category.title}" }
-            .clickable { onCategory(category.id) },
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Surface(color = majorCategoryColor(category.id), shape = MaterialTheme.shapes.medium, modifier = Modifier.size(44.dp)) {
-                Icon(categoryIcon(category), contentDescription = null, tint = ValleyGreen, modifier = Modifier.padding(10.dp))
-            }
-            Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Text("${category.entityTypes.size} 类 · ${category.entryCount} 条", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun CatalogueHeading(section: WikiSection) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 18.dp, end = 20.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text("${section.categories.size} 类", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun CategoryRow(categories: List<WikiCategory>, onCategory: (String) -> Unit) {
+private fun CategoryGridRow(categories: List<WikiCategory>, onCategory: (String) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         categories.forEach { category -> CategoryCard(category, Modifier.weight(1f), onCategory) }
-        if (categories.size == 1) Spacer(Modifier.weight(1f))
+        repeat(4 - categories.size) { Spacer(Modifier.weight(1f)) }
     }
 }
 
@@ -283,27 +243,30 @@ private fun CategoryRow(categories: List<WikiCategory>, onCategory: (String) -> 
 private fun CategoryCard(category: WikiCategory, modifier: Modifier, onCategory: (String) -> Unit) {
     Surface(
         modifier = modifier
-            .height(92.dp)
+            .height(114.dp)
             .testTag("home-category:${category.id}")
             .semantics { contentDescription = "打开分类 ${category.title}" }
             .clickable { onCategory(category.id) },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-        border = CardDefaults.outlinedCardBorder(),
+        tonalElevation = 1.dp,
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(46.dp).clip(MaterialTheme.shapes.medium).background(categoryColor(category)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(categoryIcon(category), contentDescription = null, tint = ValleyGreen, modifier = Modifier.size(25.dp))
+        Column(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Surface(color = categoryColor(category), shape = MaterialTheme.shapes.medium, modifier = Modifier.size(38.dp)) {
+                Icon(categoryIcon(category), contentDescription = null, tint = ValleyGreen, modifier = Modifier.padding(8.dp))
             }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(category.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${category.entryCount} 个条目", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                category.title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text("${category.entryCount} 条", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

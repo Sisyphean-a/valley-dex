@@ -60,6 +60,7 @@ fun DataManagementScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun DataTopBar(onBack: () -> Unit) {
     TopAppBar(
+        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         title = { Column { Text("数据管理"); Text("离线内容包与版本", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
     )

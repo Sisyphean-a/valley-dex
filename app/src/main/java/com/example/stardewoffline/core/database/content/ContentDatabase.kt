@@ -253,20 +253,29 @@ class ContentDatabase internal constructor(
         Json.Default.decodeFromString<ArtifactMetadata>(raw)
     }.getOrNull()
     private fun Cursor.toSearchDocument() = SearchDocument(toSummary(), optional("pinyin"), optional("pinyin_initials"))
-    private fun Cursor.toSummary() = EntitySummary(string("id"), string("entity_type"), string("name_zh"), optional("name_en"), optional("category"), optional("image_path"), optional("sort_key"))
+    private fun Cursor.toSummary() = EntitySummary(
+        id = string("id"),
+        entityType = string("entity_type"),
+        nameZh = string("name_zh"),
+        nameEn = optional("name_en"),
+        category = optional("category"),
+        imagePath = optional("image_path"),
+        sortKey = optional("sort_key"),
+        extraJson = string("extra_json"),
+    )
     private fun Cursor.string(column: String) = getString(getColumnIndexOrThrow(column))
     private fun Cursor.optional(column: String): String? = getColumnIndex(column).takeIf { it >= 0 && !isNull(it) }?.let(::getString)
     private fun String?.toTranslationStatus() = when (this) { "complete" -> TranslationStatus.COMPLETE; "missing" -> TranslationStatus.MISSING; "not_applicable" -> TranslationStatus.NOT_APPLICABLE; else -> TranslationStatus.UNKNOWN }
 
     private companion object {
-        const val SUMMARY_SELECT = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, s.pinyin AS sort_key"
+        const val SUMMARY_SELECT = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, e.extra_json, s.pinyin AS sort_key"
         const val SUMMARY_FROM = " FROM entities e LEFT JOIN entity_search s ON s.entity_id = e.id"
         const val SUMMARY_COLUMNS = "$SUMMARY_SELECT$SUMMARY_FROM"
         const val SUMMARY_BY_ID = "$SUMMARY_COLUMNS WHERE e.id = ? LIMIT 1"
         const val SUMMARIES_BY_TYPE = "$SUMMARY_COLUMNS WHERE e.entity_type = ? ORDER BY CASE WHEN s.pinyin IS NULL OR s.pinyin = '' THEN 1 ELSE 0 END, s.pinyin COLLATE NOCASE, e.name_zh COLLATE NOCASE"
         const val SEARCH_PREFIX = "$SUMMARY_SELECT, s.pinyin, s.pinyin_initials$SUMMARY_FROM WHERE (e.name_zh LIKE ? ESCAPE '\\' OR e.name_en LIKE ? ESCAPE '\\' COLLATE NOCASE OR s.pinyin LIKE ? ESCAPE '\\' OR REPLACE(s.pinyin, ' ', '') LIKE ? ESCAPE '\\' OR s.pinyin_initials LIKE ? ESCAPE '\\')"
         const val SEARCH_ALIAS = "$SUMMARY_COLUMNS JOIN entity_aliases a ON a.entity_id = e.id WHERE a.alias = ?"
-        const val SEARCH_FTS = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, s.pinyin AS sort_key FROM entity_search s JOIN entities e ON e.id = s.entity_id WHERE entity_search MATCH ?"
+        const val SEARCH_FTS = "SELECT e.id, e.entity_type, e.name_zh, e.name_en, e.category, e.image_path, e.extra_json, s.pinyin AS sort_key FROM entity_search s JOIN entities e ON e.id = s.entity_id WHERE entity_search MATCH ?"
         const val MAX_BIND_PARAMETERS = 900
 
         private data class SearchStatement(val sql: String, val args: Array<String>)

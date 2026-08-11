@@ -327,7 +327,7 @@ class SyntheticDataPackageFactory(private val context: Context) {
     ): List<FixtureEntity> = buildList {
         add(FixtureEntity("object:1", "object", "萝卜", "Turnip", "luo bo", "lb", "根菜", "蔬菜", null, "{}"))
         val cropImage = if (failure == SyntheticPackageFailure.MissingImage) "images/missing.webp" else IMAGE_FILE
-        add(FixtureEntity("crop:1", "crop", "萝卜种子", "Turnip Seeds", "luo bo zhong zi", "lbzz", "萝卜种", "种子", cropImage, "{\"officialDerived\":{\"harvestItemId\":\"object:1\"}}"))
+        add(FixtureEntity("crop:1", "crop", "萝卜种子", "Turnip Seeds", "luo bo zhong zi", "lbzz", "萝卜种", "种子", cropImage, "{\"officialDerived\":{\"seasons\":[\"spring\"],\"harvestItemId\":\"object:1\"}}"))
         add(FixtureEntity("fish:1", "fish", "测试鱼", "Test Fish", "ce shi yu", "csy", "试验鱼", "水域专用词", null, "{}"))
         if (variant == SyntheticPackageVariant.A) add(FixtureEntity("villager:Alice", "villager", "测试村民", "Alice", "ce shi cun min", "cscm", "爱丽丝", "村民", null, "{}"))
     }

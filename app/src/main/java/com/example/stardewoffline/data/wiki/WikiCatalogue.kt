@@ -15,6 +15,7 @@ import com.example.stardewoffline.core.model.EntryFact
 import com.example.stardewoffline.core.model.EntryImage
 import com.example.stardewoffline.core.model.EntryRelation
 import com.example.stardewoffline.core.model.EntrySection
+import com.example.stardewoffline.core.model.EntitySummary
 import com.example.stardewoffline.core.model.ManifestEntityType
 import com.example.stardewoffline.core.model.RelationTarget
 import com.example.stardewoffline.core.model.WikiCategory
@@ -36,6 +37,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 private val SUPPORT_ENTITY_TYPES = setOf("npc_schedule", "villager_gift")
 private val SELL_PRICE_FACT_LABELS = setOf("售价", "出售价格", "基础售价", "基础价格")
@@ -79,7 +86,7 @@ class DefaultWikiCatalogue @Inject constructor(
                 CataloguePage(
                     category = category,
                     entries = filterEntries(summaries, query.keyword, query.entryCategory),
-                    availableEntryCategories = summaries.mapNotNull(WikiEntrySummary::filterCategory).distinct().sorted(),
+                    availableEntryCategories = filterLabelsFor(category, summaries),
                 ),
             )
         }
@@ -223,7 +230,7 @@ class DefaultWikiCatalogue @Inject constructor(
         val term = keyword?.trim()?.takeIf(String::isNotEmpty)
         return entries.filter { entry ->
             (term == null || entry.title.contains(term, ignoreCase = true) || entry.englishTitle?.contains(term, ignoreCase = true) == true) &&
-                (entryCategory == null || entry.filterCategory == entryCategory)
+                (entryCategory == null || entryCategory in entry.filterCategories)
         }
     }
 
@@ -242,7 +249,7 @@ class DefaultWikiCatalogue @Inject constructor(
         title = summary.nameZh,
         englishTitle = englishTitleForDisplay(summary.nameZh, summary.nameEn),
         categoryLabel = typeLabel,
-        filterCategory = summary.category,
+        filterCategories = browseFiltersFor(summary),
         image = summary.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
     )
 
@@ -353,58 +360,73 @@ class DefaultWikiCatalogue @Inject constructor(
 internal fun englishTitleForDisplay(title: String, englishTitle: String?): String? =
     englishTitle?.trim()?.takeIf { it.isNotEmpty() && !it.equals(title.trim(), ignoreCase = true) }
 
+private val seasonLabels = linkedMapOf("spring" to "春季", "summer" to "夏季", "fall" to "秋季", "winter" to "冬季")
+private val villagerFilters = listOf("不可结婚村民", "可结婚女性村民", "可结婚男性村民")
+private val shopFilters = listOf("普通商店", "节日商店")
+
+internal fun browseFiltersFor(summary: EntitySummary): Set<String> = when (summary.entityType) {
+    "crop" -> summary.officialDerivedStringList("seasons").mapNotNull(seasonLabels::get).toSet()
+    "shop" -> setOf(if (summary.isFestivalShop()) "节日商店" else "普通商店")
+    "villager" -> summary.villagerFilter()?.let(::setOf).orEmpty()
+    else -> summary.category?.trim()?.takeIf(String::isNotEmpty)?.let(::setOf).orEmpty()
+}
+
+internal fun filterLabelsFor(category: WikiCategory, entries: List<WikiEntrySummary>): List<String> = when {
+    category.entityTypes == setOf("crop") -> seasonLabels.values.toList()
+    category.entityTypes == setOf("shop") -> shopFilters
+    category.entityTypes == setOf("villager") -> villagerFilters
+    else -> entries.flatMap(WikiEntrySummary::filterCategories).distinct().sorted()
+}
+
+private fun EntitySummary.officialDerivedStringList(key: String): List<String> = runCatching {
+    Json.parseToJsonElement(extraJson).jsonObject["officialDerived"]?.jsonObject?.get(key)?.jsonArray
+        ?.mapNotNull { it.jsonPrimitive.contentOrNull?.lowercase() }
+        ?: emptyList()
+}.getOrDefault(emptyList())
+
+private fun EntitySummary.villagerFilter(): String? {
+    val derived = runCatching { Json.parseToJsonElement(extraJson).jsonObject["officialDerived"]?.jsonObject }.getOrNull() ?: return null
+    return when (derived["canBeRomanced"]?.jsonPrimitive?.booleanOrNull) {
+        false -> "不可结婚村民"
+        true -> when (derived["gender"]?.jsonPrimitive?.contentOrNull?.lowercase()) {
+            "female", "f" -> "可结婚女性村民"
+            "male", "m" -> "可结婚男性村民"
+            else -> null
+        }
+        null -> null
+    }
+}
+
+private fun EntitySummary.isFestivalShop(): Boolean {
+    val source = listOf(id, nameZh, nameEn.orEmpty(), category.orEmpty()).joinToString(" ").lowercase()
+    return listOf("festival", "节日", "eggfestival", "flowerdance", "luau", "spiritseve", "stardewvalleyfair", "nightmarket", "winterstar", "desertfestival")
+        .any(source::contains)
+}
+
 object WikiCatalogueConfiguration {
     private val groups = listOf(
-        ConfiguredGroup(
-            id = "farm",
-            title = "农场经营",
-            types = listOf("object", "crop", "big_craftable", "tool", "furniture"),
-            cover = "cover-farm",
-        ),
-        ConfiguredGroup(
-            id = "community",
-            title = "人物与社区",
-            types = listOf("villager", "shop"),
-            cover = "cover-community",
-        ),
-        ConfiguredGroup(
-            id = "exploration",
-            title = "探索与战斗",
-            types = listOf("monster", "fish", "mineral", "drop", "weapon", "footwear", "ring", "trinket", "ginger_island"),
-            cover = "cover-world",
-        ),
-        ConfiguredGroup(
-            id = "missions",
-            title = "任务与收集",
-            types = listOf("achievement", "bundle", "quest", "special_order"),
-            cover = "cover-missions",
-        ),
-        ConfiguredGroup(
-            id = "crafting",
-            title = "料理与制作",
-            types = listOf("cooking_recipe", "crafting_recipe", "tailoring_recipe"),
-            cover = "cover-activities",
-        ),
+        ConfiguredGroup("farm", "农场经营", listOf("object", "crop", "big_craftable", "tool", "furniture")),
+        ConfiguredGroup("community", "人物与社区", listOf("villager", "shop")),
+        ConfiguredGroup("exploration", "探索与战斗", listOf("monster", "fish", "mineral", "drop", "weapon", "footwear", "ring", "trinket", "ginger_island")),
+        ConfiguredGroup("missions", "任务与收集", listOf("achievement", "bundle", "quest", "special_order")),
+        ConfiguredGroup("crafting", "料理与制作", listOf("cooking_recipe", "crafting_recipe", "tailoring_recipe")),
     )
 
-    /**
-     * Guarantee: every browsable manifest type appears in exactly one catalogue section;
-     * unknown future types remain reachable under “其他资料”.
-     */
+    /** Guarantee: every browsable type belongs to one catalogue subgroup; no subgroup is a navigation target. */
     fun sections(types: List<ManifestEntityType>): List<WikiSection> {
         val available = types.filter { it.count > 0 && it.id !in SUPPORT_ENTITY_TYPES }.associateBy(ManifestEntityType::id)
-        val groupedTypeIds = groups.flatMap(ConfiguredGroup::types).toSet()
-        val majorCategories = groups.mapNotNull { it.toMajorCategory(available) }
-        val catalogueSections = groups.mapNotNull { it.toCatalogueSection(available) }.toMutableList()
+        val groupedTypes = groups.flatMap(ConfiguredGroup::types).toSet()
+        val sections = groups.mapNotNull { group ->
+            group.types.mapNotNull(available::get).map(::toTypeCategory)
+                .takeIf(List<WikiCategory>::isNotEmpty)
+                ?.let { WikiSection("catalogue-${group.id}", group.title, it) }
+        }.toMutableList()
         val remaining = available.values
-            .filterNot { it.id in groupedTypeIds }
+            .filterNot { it.id in groupedTypes }
             .sortedBy(ManifestEntityType::displayName)
             .map(::toTypeCategory)
-        if (remaining.isNotEmpty()) catalogueSections += WikiSection("catalogue-other", "其他资料", remaining)
-        return buildList {
-            if (majorCategories.isNotEmpty()) add(WikiSection("major", "大类导航", majorCategories))
-            addAll(catalogueSections)
-        }
+        if (remaining.isNotEmpty()) sections += WikiSection("catalogue-other", "其他资料", remaining)
+        return sections
     }
 
     private fun toTypeCategory(type: ManifestEntityType) = WikiCategory(
@@ -415,21 +437,5 @@ object WikiCatalogueConfiguration {
         cover = CategoryCover("type-${type.id}"),
     )
 
-    private data class ConfiguredGroup(
-        val id: String,
-        val title: String,
-        val types: List<String>,
-        val cover: String,
-    ) {
-        fun toMajorCategory(available: Map<String, ManifestEntityType>): WikiCategory? {
-            val visibleTypes = types.filterTo(linkedSetOf()) { it in available }
-            if (visibleTypes.isEmpty()) return null
-            return WikiCategory(id, title, visibleTypes, visibleTypes.sumOf { available.getValue(it).count }, CategoryCover(cover))
-        }
-
-        fun toCatalogueSection(available: Map<String, ManifestEntityType>): WikiSection? {
-            val categories = types.mapNotNull(available::get).map(::toTypeCategory)
-            return categories.takeIf(List<WikiCategory>::isNotEmpty)?.let { WikiSection("catalogue-$id", title, it) }
-        }
-    }
+    private data class ConfiguredGroup(val id: String, val title: String, val types: List<String>)
 }

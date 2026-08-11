@@ -9,5 +9,4 @@ data class AppPreferences(
     val showEnglishName: Boolean = true,
     val showTechnicalFields: Boolean = false,
     val searchHistoryEnabled: Boolean = true,
-    val listLayoutMode: String = "list",
 )

@@ -26,7 +26,8 @@ class WikiCatalogueTest {
         try {
             val catalogue = catalogue(scenario)
             val sections = catalogue.sections().getOrNull() ?: error("目录不可用")
-            val all = sections.filter { it.id.startsWith("catalogue-") }.flatMap { it.categories }
+            assertTrue(sections.none { it.id == "major" })
+            val all = sections.flatMap { it.categories }
             assertEquals(setOf("type:object", "type:crop", "type:fish", "type:villager"), all.map { it.id }.toSet())
             assertEquals("作物", all.first { it.id == "type:crop" }.title)
             assertTrue(all.all { it.title.isNotBlank() && it.entryCount > 0 })
@@ -36,16 +37,16 @@ class WikiCatalogueTest {
     }
 
     @Test
-    fun semanticAndTypeCategoriesReturnNormalizedEntries() = runBlocking {
+    fun typeCategoriesReturnNormalizedEntries() = runBlocking {
         val scenario = readyScenario()
         try {
             val catalogue = catalogue(scenario)
-            val farm = catalogue.entries(CatalogueQuery("farm")).getOrNull() ?: error("农场分类不可用")
-            assertTrue(farm.entries.any { it.id == "object:1" && it.title == "萝卜" })
+            val objects = catalogue.entries(CatalogueQuery("type:object")).getOrNull() ?: error("物品分类不可用")
+            assertTrue(objects.entries.any { it.id == "object:1" && it.title == "萝卜" })
             val crop = catalogue.entries(CatalogueQuery("type:crop", "种子")).getOrNull() ?: error("作物分类不可用")
             assertEquals(listOf("crop:1"), crop.entries.map { it.id })
             assertTrue(crop.entries.single().image is com.example.stardewoffline.core.model.EntryImage.Packaged)
-            val filtered = catalogue.entries(CatalogueQuery("farm", entryCategory = "种子")).getOrNull() ?: error("分类筛选不可用")
+            val filtered = catalogue.entries(CatalogueQuery("type:crop", entryCategory = "春季")).getOrNull() ?: error("分类筛选不可用")
             assertEquals(listOf("crop:1"), filtered.entries.map { it.id })
         } finally {
             scenario.close()
@@ -68,12 +69,12 @@ class WikiCatalogueTest {
         val scenario = readyScenario()
         try {
             val catalogue = catalogue(scenario)
-            assertTrue(catalogue.entries(CatalogueQuery("farm")).getOrNull()?.entries?.isNotEmpty() == true)
+            assertTrue(catalogue.entries(CatalogueQuery("type:crop")).getOrNull()?.entries?.isNotEmpty() == true)
             val packageId = checkNotNull(scenario.preferences.current().activePackageId)
             File(scenario.context.filesDir, "content/packages/$packageId/stardew.db").writeBytes(byteArrayOf(0))
 
             assertTrue(scenario.dataPackages.verifyActive() is AppResult.Failure)
-            assertTrue(catalogue.entries(CatalogueQuery("farm")) is AppResult.Failure)
+            assertTrue(catalogue.entries(CatalogueQuery("type:crop")) is AppResult.Failure)
             assertTrue(scenario.dataPackages.openActive() is AppResult.Failure)
         } finally {
             scenario.close()

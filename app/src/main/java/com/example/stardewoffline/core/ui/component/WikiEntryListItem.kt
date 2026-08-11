@@ -11,7 +11,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Chair
+import androidx.compose.material.icons.filled.Diamond
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Grass
+import androidx.compose.material.icons.filled.Handyman
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PestControl
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SetMeal
+import androidx.compose.material.icons.filled.Stars
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -98,13 +114,43 @@ fun WikiEntryGridItem(
 
 @Composable
 private fun EntryTypeMark(label: String, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier.size(54.dp), color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
+    Surface(modifier = modifier.size(54.dp), color = typeMarkColor(label), shape = MaterialTheme.shapes.medium) {
         Column(Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text(label.take(1), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
-            Text("资料", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(entryTypeIcon(label), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
+
+private fun entryTypeIcon(label: String) = when {
+    label.matchesAny("作物", "种子", "农场") -> Icons.Filled.Grass
+    label.matchesAny("村民", "人物") -> Icons.Filled.People
+    label.matchesAny("商店") -> Icons.Filled.Storefront
+    label.matchesAny("怪物") -> Icons.Filled.PestControl
+    label.matchesAny("鱼") -> Icons.Filled.SetMeal
+    label.matchesAny("矿", "宝石") -> Icons.Filled.Diamond
+    label.matchesAny("工具") -> Icons.Filled.Build
+    label.matchesAny("家具") -> Icons.Filled.Chair
+    label.matchesAny("料理") -> Icons.Filled.Restaurant
+    label.matchesAny("制作") -> Icons.Filled.Handyman
+    label.matchesAny("成就", "任务") -> Icons.Filled.EmojiEvents
+    label.matchesAny("武器") -> Icons.Filled.Security
+    label.matchesAny("饰品") -> Icons.Filled.Stars
+    label.matchesAny("物品") -> Icons.Filled.Inventory2
+    label.matchesAny("掉落") -> Icons.Filled.AutoAwesome
+    else -> Icons.Filled.Category
+}
+
+@Composable
+private fun typeMarkColor(label: String) = when {
+    label.matchesAny("作物", "鱼", "农场") -> Color(0xFFE1EEE7)
+    label.matchesAny("村民", "商店", "任务", "成就") -> Color(0xFFF4E8C9)
+    label.matchesAny("怪物", "武器", "掉落") -> Color(0xFFF2E1D8)
+    else -> MaterialTheme.colorScheme.surfaceVariant
+}
+
+private fun String.matchesAny(vararg values: String): Boolean =
+    values.any { contains(it, ignoreCase = true) }
 
 private fun englishTitle(entry: WikiEntrySummary): String? =
     entry.englishTitle?.trim()?.takeIf { it.isNotEmpty() && !it.equals(entry.title.trim(), ignoreCase = true) }

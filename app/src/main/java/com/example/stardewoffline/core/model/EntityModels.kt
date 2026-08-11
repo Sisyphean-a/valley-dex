@@ -10,6 +10,7 @@ data class EntitySummary(
     val category: String?,
     val imagePath: String?,
     val sortKey: String?,
+    val extraJson: String = "{}",
 )
 
 data class EntityDetail(

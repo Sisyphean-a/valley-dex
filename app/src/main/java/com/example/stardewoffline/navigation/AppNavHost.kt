@@ -13,8 +13,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.activity.compose.LocalActivity
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -51,7 +55,18 @@ fun AppNavHost() {
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    Scaffold(bottomBar = { if (route in MAIN_DESTINATIONS.map(MainDestination::route)) BottomBar(route) { navigateMainDestination(nav, it) } }) { padding ->
+    val hasDarkTopChrome = route in setOf("home", "search", "favorites", "more", "settings") || route?.startsWith("catalogue/") == true
+    val topChromeColor = if (hasDarkTopChrome) androidx.compose.ui.graphics.Color(0xFF163F37) else androidx.compose.material3.MaterialTheme.colorScheme.surface
+    val view = LocalView.current
+    val activity = LocalActivity.current
+    SideEffect {
+        activity?.window?.let { WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = !hasDarkTopChrome }
+    }
+    Scaffold(
+        containerColor = topChromeColor,
+        contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onBackground,
+        bottomBar = { if (route in MAIN_DESTINATIONS.map(MainDestination::route)) BottomBar(route) { navigateMainDestination(nav, it) } },
+    ) { padding ->
         NavHost(nav, "home", Modifier.padding(padding)) {
             composable("home") {
                 HomeRoute(

@@ -51,7 +51,6 @@ class SettingsViewModel @Inject constructor(
     fun setEnglish(value: Boolean) = viewModelScope.launch { preferences.setShowEnglishName(value) }
     fun setTechnical(value: Boolean) = viewModelScope.launch { preferences.setShowTechnicalFields(value) }
     fun setSearchHistory(value: Boolean) = viewModelScope.launch { preferences.setSearchHistoryEnabled(value) }
-    fun setLayout(value: String) = viewModelScope.launch { preferences.setListLayoutMode(value) }
     fun clearHistory() = viewModelScope.launch { user.clearHistory() }
     fun clearSearches() = viewModelScope.launch { user.clearSearches() }
 }
@@ -59,7 +58,7 @@ class SettingsViewModel @Inject constructor(
 @Composable
 fun SettingsRoute(onBack: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsState()
-    SettingsScreen(settings, onBack, viewModel::setTheme, viewModel::setDynamic, viewModel::setEnglish, viewModel::setTechnical, viewModel::setSearchHistory, viewModel::setLayout, viewModel::clearHistory, viewModel::clearSearches)
+    SettingsScreen(settings, onBack, viewModel::setTheme, viewModel::setDynamic, viewModel::setEnglish, viewModel::setTechnical, viewModel::setSearchHistory, viewModel::clearHistory, viewModel::clearSearches)
 }
 
 @Composable
@@ -71,7 +70,6 @@ private fun SettingsScreen(
     onEnglish: (Boolean) -> Unit,
     onTechnical: (Boolean) -> Unit,
     onSearchHistory: (Boolean) -> Unit,
-    onLayout: (String) -> Unit,
     onClearHistory: () -> Unit,
     onClearSearches: () -> Unit,
 ) {
@@ -93,7 +91,6 @@ private fun SettingsScreen(
         SettingsSection("内容显示") {
             SettingSwitch("显示英文名称", "在中文名下显示英文原名", settings.showEnglishName, onEnglish)
             SettingSwitch("显示技术字段", "展示高级数据与原始条件", settings.showTechnicalFields, onTechnical)
-            ChoiceRow("列表布局", listOf("列表" to "list", "紧凑" to "compact"), settings.listLayoutMode, onLayout)
         }
         SettingsSection("隐私与记录") {
             SettingSwitch("记录搜索历史", "搜索词仅保存在本机", settings.searchHistoryEnabled, onSearchHistory)

@@ -13,17 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -48,11 +46,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.datastore.AppPreferencesRepository
-import com.example.stardewoffline.core.model.CatalogueDisplayMode
 import com.example.stardewoffline.core.model.CataloguePage
 import com.example.stardewoffline.core.model.CatalogueQuery
 import com.example.stardewoffline.core.ui.component.WikiEntryGridItem
-import com.example.stardewoffline.core.ui.component.WikiEntryListItem
 import com.example.stardewoffline.data.ContentRepository
 import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -71,7 +67,6 @@ data class CatalogueUiState(
     val page: CataloguePage? = null,
     val keyword: String = "",
     val selectedEntryCategory: String? = null,
-    val displayMode: CatalogueDisplayMode = CatalogueDisplayMode.List,
     val isLoading: Boolean = true,
     val error: String? = null,
 )
@@ -107,10 +102,6 @@ class TypeListViewModel @Inject constructor(
     fun selectEntryCategory(value: String?) {
         mutableState.value = mutableState.value.copy(selectedEntryCategory = value)
         reload()
-    }
-
-    fun setDisplayMode(value: CatalogueDisplayMode) {
-        mutableState.value = mutableState.value.copy(displayMode = value)
     }
 
     fun retry() = reload()
@@ -166,7 +157,7 @@ fun TypeListRoute(
     val root by viewModel.root.collectAsState()
     val page = state.page
     when {
-        page != null -> CatalogueContent(page, state, root, onDetail, onBack, viewModel::updateKeyword, viewModel::selectEntryCategory, viewModel::setDisplayMode)
+        page != null -> CatalogueContent(page, state, root, onDetail, onBack, viewModel::updateKeyword, viewModel::selectEntryCategory)
         state.isLoading -> CatalogueLoading(onBack)
         else -> CatalogueError(state.error ?: "无法加载分类", onBack, viewModel::retry)
     }
@@ -183,7 +174,6 @@ private fun CatalogueContent(
     onBack: () -> Unit,
     onKeywordChange: (String) -> Unit,
     onSelectEntryCategory: (String?) -> Unit,
-    onDisplayMode: (CatalogueDisplayMode) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
@@ -203,16 +193,13 @@ private fun CatalogueContent(
                             color = Color(0xFFC7D8D1),
                         )
                     }
-                    Surface(color = Color(0xFF2A544B), shape = MaterialTheme.shapes.medium) {
-                        Text("离线", modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium, color = Color(0xFFE1EEE7))
-                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = state.keyword,
                     onValueChange = onKeywordChange,
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = TYPE_LIST_SEARCH_FIELD_DESCRIPTION },
-                    label = { Text("搜索本分类") },
+                    placeholder = { Text("搜索本分类") },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -222,38 +209,15 @@ private fun CatalogueContent(
                 )
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("显示 ${state.page?.entries?.size ?: 0} 条结果", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            DisplayModeSwitch(state.displayMode, onDisplayMode)
-        }
         CategoryFilters(page, state.selectedEntryCategory, onSelectEntryCategory)
         if (page.entries.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text("当前条件下没有匹配条目", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        } else if (state.displayMode == CatalogueDisplayMode.List) {
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                items(page.entries, key = { it.id }) { entry ->
-                    WikiEntryListItem(
-                        entry = entry,
-                        packageRoot = root,
-                        showCategoryLabel = page.category.entityTypes.size > 1,
-                        onClick = { onDetail(entry.id) },
-                    )
-                }
-            }
         } else {
             LazyVerticalGrid(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Fixed(4),
                 contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -310,7 +274,10 @@ private fun CategoryFilters(page: CataloguePage, selected: String?, onSelect: (S
         contentPadding = PaddingValues(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        item { FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text("全部") }) }
+        item {
+            val allLabel = if (page.category.entityTypes == setOf("villager")) "全部村民" else "全部"
+            FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text(allLabel) })
+        }
         items(categories) { category ->
             FilterChip(selected = selected == category, onClick = { onSelect(category) }, label = { Text(category) })
         }
@@ -318,11 +285,3 @@ private fun CategoryFilters(page: CataloguePage, selected: String?, onSelect: (S
 }
 
 private const val TYPE_LIST_SEARCH_FIELD_DESCRIPTION = "分类搜索输入框"
-
-@Composable
-private fun DisplayModeSwitch(mode: CatalogueDisplayMode, onSelect: (CatalogueDisplayMode) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(selected = mode == CatalogueDisplayMode.List, onClick = { onSelect(CatalogueDisplayMode.List) }, label = { Text("列表") })
-        FilterChip(selected = mode == CatalogueDisplayMode.Grid, onClick = { onSelect(CatalogueDisplayMode.Grid) }, label = { Text("网格") })
-    }
-}

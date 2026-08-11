@@ -17,7 +17,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.stardewoffline.core.common.AppResult
-import com.example.stardewoffline.core.model.CatalogueDisplayMode
 import com.example.stardewoffline.core.model.EntryFact
 import com.example.stardewoffline.core.model.EntryImage
 import com.example.stardewoffline.core.model.EntrySection
@@ -175,7 +174,6 @@ class RouteNavigationTest {
                     preferences = scenario.preferences,
                 )
             }
-            viewModel.setDisplayMode(CatalogueDisplayMode.Grid)
             setRoute { TypeListRoute(onDetail = { gridDetail = it }, viewModel = viewModel) }
             waitForText("萝卜种子")
             waitForText("Turnip Seeds")

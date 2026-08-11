@@ -116,6 +116,7 @@ private fun HistoryScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun HistoryTopBar(onBack: () -> Unit, canClear: Boolean, onClear: () -> Unit) {
     TopAppBar(
+        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         title = { Text("浏览历史") },
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
         actions = { if (canClear) IconButton(onClick = onClear) { Icon(Icons.Filled.Delete, "清空历史") } },
