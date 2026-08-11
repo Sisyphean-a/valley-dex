@@ -35,7 +35,30 @@ data class WikiEntrySummary(
     val categoryLabel: String,
     val filterCategories: Set<String> = emptySet(),
     val image: EntryImage,
+    val shop: ShopPresentation? = null,
 )
+
+data class ShopPresentation(
+    val owner: ShopOwner? = null,
+    val offerCount: Int = 0,
+    val kind: ShopKind,
+)
+
+data class ShopOwner(
+    val id: String,
+    val title: String,
+    val image: EntryImage,
+)
+
+enum class ShopKind {
+    FESTIVAL,
+    TRAVELING,
+    EXCHANGE,
+    CASINO,
+    BOOKSELLER,
+    VOLCANO,
+    GENERAL,
+}
 
 data class WikiSearchQuery(
     val text: String,

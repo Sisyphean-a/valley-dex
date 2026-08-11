@@ -33,13 +33,24 @@ class DetailPresentationParserTest {
     }
 
     @Test
-    fun ignoresUnknownShopRuntimeFields() {
+    fun ignoresShopRuntimeFieldsWithoutStableShopRecords() {
         val presentation = DetailPresentationParser.present(entity("shop", """
             {"Currency":0,"Owners":[{"Name":"Willy"}],"Items":[{"ItemId":"(O)219","Price":250,"Condition":"SEASON summer"}]}
         """))
 
-        assertTrue(presentation.facts.isEmpty())
+        assertEquals(listOf("可售商品", "交易货币"), presentation.facts.map { it.label })
         assertTrue(presentation.relationGroups.isEmpty())
+    }
+
+    @Test
+    fun mapsStructuredShopOwnersAndSummaryFacts() {
+        val presentation = DetailPresentationParser.present(entity("shop", """
+            {"Currency":0,"Owners":[{"Id":"Willy"},{"Id":"AnyOrNone"}],"Items":[{"Id":"(O)219","ItemId":"(O)219","Price":250}]}
+        """))
+
+        assertEquals("1 项", presentation.facts.single { it.label == "可售商品" }.value)
+        assertEquals("金币", presentation.facts.single { it.label == "交易货币" }.value)
+        assertEquals(listOf("Willy", "AnyOrNone"), presentation.relationGroups.single { it.title == "店主" }.relations.mapNotNull { it.targetId })
     }
 
     @Test

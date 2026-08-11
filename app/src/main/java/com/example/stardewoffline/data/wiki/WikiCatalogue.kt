@@ -18,6 +18,9 @@ import com.example.stardewoffline.core.model.EntrySection
 import com.example.stardewoffline.core.model.EntitySummary
 import com.example.stardewoffline.core.model.ManifestEntityType
 import com.example.stardewoffline.core.model.RelationTarget
+import com.example.stardewoffline.core.model.ShopKind
+import com.example.stardewoffline.core.model.ShopOwner
+import com.example.stardewoffline.core.model.ShopPresentation
 import com.example.stardewoffline.core.model.WikiCategory
 import com.example.stardewoffline.core.model.WikiEntry
 import com.example.stardewoffline.core.model.WikiEntrySubmenu
@@ -38,6 +41,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -204,10 +208,23 @@ class DefaultWikiCatalogue @Inject constructor(
     ): AppResult<List<WikiEntrySummary>> {
         val summaries = content.summaries(types)
         val grouped = summaries.getOrNull() ?: return summaries.failure()
+        val shopOwnerIds = grouped["shop"].orEmpty().associate { it.id to it.shopOwnerIds() }
+        val ownerSummaries = if (shopOwnerIds.isEmpty()) {
+            emptyMap()
+        } else {
+            val resolved = content.summaries(shopOwnerIds.values.flatten().distinct().map { "villager:$it" })
+            resolved.getOrNull() ?: return resolved.failure()
+        }
         val entries = mutableListOf<WikiEntrySummary>()
         for (type in types) {
             val label = typeLabels[type] ?: return AppResult.Failure(AppError.InvalidEntityTypeCatalog("未声明类型：$type"))
-            entries += grouped[type].orEmpty().map { toWikiSummary(it, label) }
+            entries += grouped[type].orEmpty().map { summary ->
+                toWikiSummary(
+                    summary,
+                    label,
+                    summary.takeIf { it.entityType == "shop" }?.let { shopPresentationFor(it, shopOwnerIds[it.id].orEmpty(), ownerSummaries) },
+                )
+            }
         }
         return AppResult.Success(entries)
     }
@@ -244,6 +261,7 @@ class DefaultWikiCatalogue @Inject constructor(
     private fun toWikiSummary(
         summary: com.example.stardewoffline.core.model.EntitySummary,
         typeLabel: String,
+        shop: ShopPresentation? = null,
     ) = WikiEntrySummary(
         id = summary.id,
         title = summary.nameZh,
@@ -251,6 +269,7 @@ class DefaultWikiCatalogue @Inject constructor(
         categoryLabel = typeLabel,
         filterCategories = browseFiltersFor(summary),
         image = summary.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
+        shop = shop,
     )
 
     private fun toEntryFact(fact: com.example.stardewoffline.core.model.DetailFact) = EntryFact(fact.label, fact.value)
@@ -327,6 +346,7 @@ class DefaultWikiCatalogue @Inject constructor(
         // Rule: a shop card is useful only when its product resolves to a published entry.
         // Failure: do not turn a purchase price into a fake product name or expose an empty offer.
         if (section == "商品" && resolvedTarget == null) return null
+        if (section == "店主" && (resolvedTarget as? RelationTarget.Entry)?.id?.substringBefore(':') != "villager") return null
         val target = resolvedTarget
             ?: relation.details.firstOrNull()?.value?.takeIf(String::isNotBlank)?.let(RelationTarget::ReadableText)
             ?: RelationTarget.Unavailable("关联内容暂未收录")
@@ -359,6 +379,46 @@ class DefaultWikiCatalogue @Inject constructor(
 
 internal fun englishTitleForDisplay(title: String, englishTitle: String?): String? =
     englishTitle?.trim()?.takeIf { it.isNotEmpty() && !it.equals(title.trim(), ignoreCase = true) }
+
+internal fun shopPresentationFor(
+    shop: EntitySummary,
+    ownerIds: List<String>,
+    ownerSummaries: Map<String, EntitySummary>,
+): ShopPresentation {
+    val owner = ownerIds.firstNotNullOfOrNull { ownerId ->
+        ownerSummaries["villager:$ownerId"]?.takeIf { it.entityType == "villager" }
+    }?.let { summary ->
+        ShopOwner(
+            id = summary.id,
+            title = summary.nameZh,
+            image = summary.imagePath?.let(EntryImage::Packaged) ?: EntryImage.Missing,
+        )
+    }
+    return ShopPresentation(owner = owner, offerCount = shop.shopOfferCount(), kind = shop.shopKind())
+}
+
+private fun EntitySummary.shopOwnerIds(): List<String> = runCatching {
+    Json.parseToJsonElement(extraJson).jsonObject["Owners"]?.jsonArray.orEmpty()
+        .mapNotNull { owner -> (owner as? JsonObject)?.get("Id")?.jsonPrimitive?.contentOrNull }
+        .filter(String::isNotBlank)
+}.getOrDefault(emptyList())
+
+private fun EntitySummary.shopOfferCount(): Int = runCatching {
+    Json.parseToJsonElement(extraJson).jsonObject["Items"]?.jsonArray?.size ?: 0
+}.getOrDefault(0)
+
+private fun EntitySummary.shopKind(): ShopKind {
+    val identity = "$id $nameZh".lowercase()
+    return when {
+        "desertfestival" in identity || "节" in nameZh -> ShopKind.FESTIVAL
+        "traveler" in identity || "旅行" in nameZh -> ShopKind.TRAVELING
+        "casino" in identity || "赌场" in nameZh -> ShopKind.CASINO
+        "trade" in identity || "兑换" in nameZh || "交换" in nameZh -> ShopKind.EXCHANGE
+        "book" in identity || "书摊" in nameZh -> ShopKind.BOOKSELLER
+        "volcano" in identity || "火山" in nameZh -> ShopKind.VOLCANO
+        else -> ShopKind.GENERAL
+    }
+}
 
 private val seasonLabels = linkedMapOf("spring" to "春季", "summer" to "夏季", "fall" to "秋季", "winter" to "冬季")
 private val villagerFilters = listOf("不可结婚村民", "可结婚女性村民", "可结婚男性村民")

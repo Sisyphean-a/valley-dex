@@ -34,7 +34,7 @@ code-paths:
 - `WikiCatalogue` 是页面的内容边界。首页、分类、搜索、详情、收藏和历史使用它的模型，不直接读取 `ContentDatabase`、原始 JSON 或技术类型 ID。
 - 首页只保留快捷入口与“全部分类”四列网格：每个活动包中有数据的可浏览类型各有一个直接入口，并按农场经营、人物与社区、探索与战斗、任务与收集、料理与制作等小分组标题组织；未知未来类型进入“其他资料”。这些标题只组织全部分类，不是可点击的大类导航。`npc_schedule` 与 `villager_gift` 是村民支援记录，不作为普通类型入口或搜索结果单独出现；它们由对应村民条目聚合为可展开子菜单。普通界面始终使用 manifest 的可读 `displayName`，不把原始 ID 当标题。
 - 分类页只使用四列网格展示轻量摘要、可选英文名和必要类型信息，不提供布局切换或重复的结果统计；保留分类内搜索和筛选。作物筛选固定按春、夏、秋、冬展示，跨季作物进入每个适用季节；商店分为普通商店和节日商店；村民提供全部村民、不可结婚村民、可结婚女性村民和可结婚男性村民。季节和可婚配筛选只读取 `officialDerived` 已确认字段，未知值只保留在全部结果中。搜索框用占位提示而非浮动标签，避免聚焦时的轮廓缺口。没有图片的条目使用与类型匹配的图标和色块，而非首字母占位。详情页以高密度的头部摘要、两列事实、可展开子菜单、关联内容和个人笔记组织信息，摘要正文不可无入口截断。村民详情继续把日程和礼物偏好作为可展开信息区。详情由 `DetailPresentationParser` 按实体类型读取已确认字段和 `officialDerived`。缺失字段不推断为 `false`、`0` 或永不发生；未知字段不强行解释，游戏条件只原样说明而不求值。
-- 关系解析集中在 `EntityRelationResolver`，先生成候选稳定 ID 再批量查询。无法唯一跳转时，普通关系保留可读信息或显示明确未收录状态；商店商品关系只保留能解析为已发布条目的商品，未收录的运行时/动态选项直接隐藏，不创建假实体、不向普通页面泄漏原始 ID。
+- 关系解析集中在 `EntityRelationResolver`，先生成候选稳定 ID 再批量查询。无法唯一跳转时，普通关系保留可读信息或显示明确未收录状态；商店商品关系只保留能解析为已发布条目的商品，未收录的运行时/动态选项直接隐藏，不创建假实体、不向普通页面泄漏原始 ID。商店的 `Owners[].Id` 只有解析为已发布的 `villager` 条目时才作为店主，分类卡优先展示该村民头像；没有可解析店主时按已确认的商店性质展示语义图标，不能把 `AnyOrNone`、关闭状态等运行时值伪装成人物。商店详情可展示已确认的商品数、交易货币和可跳转店主。
 - 搜索先标准化输入，再合并中文/英文前缀、别名、拼音、首字母和 FTS 命中；按实体 ID 去重并保留最高分和命中原因。已选实体类型会下推到每种 SQLite 查询，页面保留当前包完整的类型筛选入口。查询参数必须绑定，用户输入中的 LIKE/FTS 特殊字符不能改变查询语义。
 - 图片只从活动包的 `image_path` 解析本地文件；路径越界或文件不存在时使用明确的本地占位，不联网、不现场裁切游戏图集。
 - 收藏、历史、笔记和搜索历史不写内容库。数据包更新后保留稳定 ID 记录；当前包不存在的收藏/历史仍可见并可删除，笔记和搜索历史的连续性不依赖当前实体存在。
@@ -46,7 +46,7 @@ code-paths:
 - `data/wiki/WikiCatalogue.kt`：目录配置、条目模型、搜索适配和关系降级。
 - `core/model/WikiCatalogueModels.kt`：图鉴分类、条目、关系目标和图片状态。
 - `core/database/content/ContentDatabase.kt`、`data/SearchRepository.kt`：摘要批量投影、实体类型筛选、别名、拼音和 FTS 查询及分层评分。
-- `core/json/DetailPresentationParser.kt`、`core/formatter/DetailFormatters.kt`：类型事实、条件和数值的可读表达。
+- `core/json/DetailPresentationParser.kt` 及其 `DetailFactParser`、`DetailRelationParser` 内部模块，配合 `core/formatter/DetailFormatters.kt`：类型事实、关系、条件和数值的可读表达。
 - `data/EntityRelationResolver.kt`：稳定 ID 候选与批量关系解析。
 - `core/database/user/UserDatabase.kt`、`UserDataDao.kt`、`data/UserDataRepository.kt`：本地个人记录和软引用。
 - `feature/home/HomeFeature.kt`、`feature/type/TypeListFeature.kt`、`feature/search/SearchFeature.kt`、`feature/detail/DetailScreen.kt`、`feature/favorites/FavoritesFeature.kt`、`feature/history/HistoryFeature.kt`：用户路径。

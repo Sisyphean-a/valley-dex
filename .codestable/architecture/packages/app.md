@@ -30,7 +30,7 @@ code-paths:
 | 数据包 | 安全解压、schema 4 发布校验、暂存提交、激活、回滚和清理 | `core/datapackage/SafeZipExtractor.kt`、`DataPackageValidator.kt`、`DataPackageInstaller.kt`、`DataPackageManager.kt` |
 | 内容数据库 | 只读 SQLite、元数据、实体摘要/详情、类型、别名和 FTS 查询 | `core/database/content/ContentDatabaseFactory.kt`、`ContentDatabase.kt`、`ContentDatabaseManager.kt` |
 | 内容领域 | 仓储、搜索分层评分、关系候选批量解析和语义图鉴模型 | `data/ContentRepository.kt`、`data/SearchRepository.kt`、`data/EntityRelationResolver.kt`、`data/wiki/WikiCatalogue.kt` |
-| 详情表达 | 从 `officialDerived` 和已确认字段生成事实、关系和可读降级 | `core/json/DetailPresentationParser.kt`、`core/formatter/DetailFormatters.kt` |
+| 详情表达 | `DetailPresentationParser` 保持单一公开入口，事实、关系和共享 JSON 读取分别由内部解析模块拥有 | `core/json/DetailPresentationParser.kt`、`DetailFactParser.kt`、`DetailRelationParser.kt`、`DetailPresentationParsingSupport.kt`、`core/formatter/DetailFormatters.kt` |
 | 个人数据 | Room 实体/DAO 与稳定 ID 软引用 | `core/database/user/UserDatabase.kt`、`UserDataDao.kt`、`data/UserDataRepository.kt` |
 | 偏好与依赖注入 | DataStore 偏好、数据库和应用单例装配 | `core/datastore/AppPreferencesRepository.kt`、`di/DatabaseModule.kt`、`di/AppModule.kt` |
 | 页面 | 首页、分类、搜索、详情、收藏、历史、设置、数据管理、关于 | `feature/*` |
