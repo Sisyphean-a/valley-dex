@@ -34,15 +34,12 @@ class DetailViewModel @Inject constructor(
     private val mutableState = MutableStateFlow(DetailUiState())
     val state = mutableState.asStateFlow()
     val favorite = user.isFavorite(id)
-    val note = user.note(id)
 
     init {
         viewModelScope.launch { load() }
     }
 
     fun toggleFavorite(value: Boolean) = viewModelScope.launch { user.toggleFavorite(id, !value) }
-
-    fun saveNote(value: String) = viewModelScope.launch { user.saveNote(id, value) }
 
     /**
      * Failure: any content or presentation exception becomes a visible error instead of leaving the detail page loading forever.

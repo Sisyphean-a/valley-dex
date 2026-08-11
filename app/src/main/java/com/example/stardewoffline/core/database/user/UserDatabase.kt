@@ -32,9 +32,6 @@ data class FavoriteEntity(@PrimaryKey val entityId: String, val createdAt: Long)
 )
 data class HistoryEntity(@PrimaryKey val entityId: String, val lastViewedAt: Long, val viewCount: Int = 1)
 
-@Entity(tableName = "notes")
-data class NoteEntity(@PrimaryKey val entityId: String, val content: String, val updatedAt: Long)
-
 @Entity(
     tableName = "recent_searches",
     indices = [
@@ -47,7 +44,7 @@ data class NoteEntity(@PrimaryKey val entityId: String, val content: String, val
 )
 data class RecentSearchEntity(@PrimaryKey val normalizedQuery: String, val displayQuery: String, val lastUsedAt: Long, val useCount: Int = 1)
 
-@Database(entities = [FavoriteEntity::class, HistoryEntity::class, NoteEntity::class, RecentSearchEntity::class], version = 2, exportSchema = true)
+@Database(entities = [FavoriteEntity::class, HistoryEntity::class, RecentSearchEntity::class], version = 3, exportSchema = true)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun userDataDao(): UserDataDao
 
@@ -57,6 +54,12 @@ abstract class UserDatabase : RoomDatabase() {
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_favorites_createdAt_entityId` ON `favorites` (`createdAt` DESC, `entityId` ASC)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_view_history_lastViewedAt_entityId` ON `view_history` (`lastViewedAt` DESC, `entityId` ASC)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_recent_searches_lastUsedAt_normalizedQuery` ON `recent_searches` (`lastUsedAt` DESC, `normalizedQuery` ASC)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DROP TABLE IF EXISTS `notes`")
             }
         }
     }

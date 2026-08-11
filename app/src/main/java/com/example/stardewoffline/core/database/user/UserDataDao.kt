@@ -33,10 +33,6 @@ interface UserDataDao {
         trimHistory()
     }
 
-    @Query("SELECT * FROM notes WHERE entityId = :id LIMIT 1") fun note(id: String): Flow<NoteEntity?>
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveNote(value: NoteEntity)
-    @Query("DELETE FROM notes WHERE entityId = :id") suspend fun deleteNote(id: String)
-
     @Query("SELECT * FROM recent_searches ORDER BY lastUsedAt DESC, normalizedQuery ASC LIMIT 20") fun searches(): Flow<List<RecentSearchEntity>>
     @Query("""
         INSERT INTO recent_searches(normalizedQuery, displayQuery, lastUsedAt, useCount)

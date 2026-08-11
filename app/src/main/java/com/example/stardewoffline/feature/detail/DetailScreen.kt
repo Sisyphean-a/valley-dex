@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,7 +19,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,12 +27,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,10 +62,8 @@ private val DetailGold = Color(0xFFE1AD4B)
 fun DetailScreen(
     state: DetailUiState,
     favorite: Boolean,
-    note: String,
     onBack: () -> Unit,
     onFavorite: () -> Unit,
-    onSaveNote: (String) -> Unit,
     onDetail: (String) -> Unit,
 ) {
     val entry = state.entry
@@ -91,7 +84,6 @@ fun DetailScreen(
             items(entry.sections, key = EntrySection::title) { section -> EntrySectionCard(section, Modifier.padding(horizontal = 16.dp)) }
             items(entry.submenus, key = WikiEntrySubmenu::title) { submenu -> EntrySubmenuCard(submenu, onDetail, Modifier.padding(horizontal = 16.dp)) }
             item { RelationSection(entry.relations, state.packageRoot, onDetail, Modifier.padding(horizontal = 16.dp)) }
-            item { NoteSection(note, onSaveNote, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
         }
     }
 }
@@ -272,25 +264,6 @@ private fun RelationCard(relation: EntryRelation, packageRoot: java.io.File?, on
             if (entry != null) Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(17.dp))
         }
     }
-}
-
-@Composable
-private fun NoteSection(note: String, onSave: (String) -> Unit, modifier: Modifier) {
-    var draft by rememberSaveable(note) { mutableStateOf(note) }
-    var confirmDelete by rememberSaveable { mutableStateOf(false) }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Text("个人笔记", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
-        OutlinedTextField(value = draft, onValueChange = { if (it.length <= 5000) draft = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp), label = { Text("最多 5000 个字符") })
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onSave(draft) }) { Text("保存笔记") }
-            if (note.isNotBlank()) OutlinedButton(onClick = { confirmDelete = true }) { Text("删除") }
-        }
-    }
-    if (confirmDelete) AlertDialog(
-        onDismissRequest = { confirmDelete = false }, title = { Text("删除笔记") }, text = { Text("删除后无法恢复。") },
-        confirmButton = { TextButton(onClick = { draft = ""; onSave(""); confirmDelete = false }) { Text("删除") } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
-    )
 }
 
 private fun EntryImage.relativePath(): String? = (this as? EntryImage.Packaged)?.relativePath

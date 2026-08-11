@@ -153,7 +153,7 @@ class RouteNavigationTest {
                 ),
             ),
         )
-        setRoute { DetailScreen(DetailUiState(entry = entry), favorite = false, note = "", onBack = {}, onFavorite = {}, onSaveNote = {}, onDetail = {}) }
+        setRoute { DetailScreen(DetailUiState(entry = entry), favorite = false, onBack = {}, onFavorite = {}, onDetail = {}) }
         composeRule.onNodeWithTag("detail-submenu-header:日程").performScrollTo().performClick()
         composeRule.onNodeWithTag("detail-schedule-row:默认日程").assertExists()
         composeRule.onNodeWithTag("detail-submenu-header:日程").performClick()

@@ -20,7 +20,7 @@ class UserDataContinuityTest {
     private val context get() = instrumentationTestContext()
 
     @Test
-    fun preservesUserRecordsAcrossPackageSwitchAndAllowsMissingRecordCleanup() = runBlocking {
+    fun preservesFavoritesHistoryAndSearchesAcrossPackageSwitchAndAllowsMissingRecordCleanup() = runBlocking {
         val scenario = TestAppScenario.create(context)
         try {
             install(scenario, SyntheticPackageVariant.A)
@@ -29,7 +29,6 @@ class UserDataContinuityTest {
 
             assertEquals(setOf("object:1", "villager:Alice"), scenario.userRepository.favorites().first().map { it.entityId }.toSet())
             assertEquals(setOf("object:1", "villager:Alice"), scenario.userRepository.history().first().map { it.entityId }.toSet())
-            assertEquals("我的萝卜笔记", scenario.userRepository.note("object:1").first()?.content)
             assertEquals(listOf("萝卜"), scenario.userRepository.recentSearches().first().map { it.displayQuery })
             assertNull(scenario.contentRepository.detail("villager:Alice").getOrNull())
 
@@ -42,28 +41,11 @@ class UserDataContinuityTest {
         }
     }
 
-    @Test
-    fun savesAndDeletesNotesWithoutTyingThemToCurrentPackageAvailability() = runBlocking {
-        val scenario = TestAppScenario.create(context)
-        try {
-            install(scenario, SyntheticPackageVariant.A)
-            scenario.userRepository.saveNote("villager:Alice", "离线笔记")
-            install(scenario, SyntheticPackageVariant.B)
-            assertEquals("离线笔记", scenario.userRepository.note("villager:Alice").first()?.content)
-
-            scenario.userRepository.saveNote("villager:Alice", "")
-            assertNull(scenario.userRepository.note("villager:Alice").first())
-        } finally {
-            scenario.close()
-        }
-    }
-
     private suspend fun writeUserRecords(scenario: TestAppScenario) {
         scenario.userRepository.toggleFavorite("object:1", true)
         scenario.userRepository.toggleFavorite("villager:Alice", true)
         scenario.userRepository.recordView("object:1")
         scenario.userRepository.recordView("villager:Alice")
-        scenario.userRepository.saveNote("object:1", "我的萝卜笔记")
         scenario.userRepository.rememberSearch("萝卜", "萝卜")
     }
 
