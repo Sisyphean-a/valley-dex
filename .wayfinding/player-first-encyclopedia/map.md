@@ -15,7 +15,7 @@
 ## 约束
 
 - 两个仓库可以同时调整，但各自保留独立的 `.codestable`、架构边界、验证与发布流程。
-- 游戏事实以官方资产为依据；中文 Wiki 用于理解玩家问题、中文术语和信息优先级。来源必须可区分。
+- 游戏事实优先依据官方资产；只有相关官方路径无法稳定回答已确认的玩家核心问题时，才允许 builder 纳入经过版本化审核且与官方来源隔离的补充事实。中文 Wiki 主要用于理解玩家问题、中文术语和信息优先级，不复制其描述、攻略段落或表格文本。
 - 未知、动态、条件化和缺失信息不得猜测为固定结论。
 - 应用继续完全离线；`stardew.db` 只读，个人数据继续独立保存。
 - 不同实体类型可以采用不同信息结构，不再强行套统一详情模板。
@@ -53,17 +53,18 @@
 - [玩家语义词汇表](decisions/03-player-semantics.md) - 统一区分购买价/兑换成本/出售价格、获得方式/用途、地点/水域/矿井层、制作/加工/升级，以及固定、条件、动态、未知、暂未收录和不适用。
 - [分类信息契约](decisions/04-category-information-contracts.md) - 八类条目分别以自身核心玩家行动组织列表与详情；大型可制作物再按机器、设施/容器、装饰/照明和不可制作物细分，当前缺口不得由相似技术字段顶替。
 - [人物关系模型](decisions/05-character-relationship-model.md) - 人物关系采用有来源、有方向的闭集；住所和婚配资格不是关系，`LoveInterest` 不是正在恋爱，文森特与贾斯当前只显示“亲友关联（具体关系未注明）”。
+- [条件与来源可信度](decisions/06-condition-and-provenance.md) - 核心事实必须携带明确状态、条件完整性和事实级来源；未知条件不得静默丢弃，官方直接、跨表、计算、展示覆盖与 Wiki 语义参考保持分离。
+- [关键事实缺口策略](decisions/07-critical-fact-gap-policy.md) - 核心缺口先按事实范围穷尽官方字段、跨表、未识别资产、事件/地图与必要代码规则；仍无法回答时才准入逐条审核、版本化且与官方隔离的结构化补充事实。
+- [图片质量门槛](decisions/08-image-quality-gate.md) - 每个实体必须声明官方图片、复用、官方无图、代理视觉或待复核状态；逐图内容绑定、分类 100% 必需名单和确定性视觉复核共同保护发布。
+- [跨仓库数据契约](decisions/09-cross-repo-data-contract.md) - 采用破坏性的 manifest 2 / schema 5 / `player-facts-v1`，以类型化事实、关系、条件、证据、视觉和查询投影替代 `officialDerived`，并通过全语义安装校验和原子回滚切换。
+- [玩家信息层级原型](decisions/10-information-hierarchy-prototype.md) - 分类入口保持四列，实体列表按屏宽和字体响应为一至多列；详情采用身份头部、立即行动、完整资料和数据说明四层，并以八类代表任务及小屏/大字体压力样本验证。
+- [搜索与浏览模型](decisions/11-search-and-browse-model.md) - 名称和受控语义进入全局搜索，小而稳定的分类维度进入 facet，高基数有向关联进入反向浏览；同 scope 条件联合匹配，并以稳定数据库排序、游标和查询快照防止遗漏或错配。
+- [发布质量与真实数据验收](decisions/12-release-quality-and-validation.md) - 结构正确性零容错，核心事实按分类与槽设覆盖门槛并受跨版本回归预算保护；真实资产、真实 v5 包、图片人工复核、设备矩阵、玩家任务、性能 SLO 和留存证据共同决定能否发布。
+- [实施交付图](decisions/13-delivery-slices.md) - 以冻结 v4 基线为根，先交付 schema 5 契约和 conformance fixture，再纵向完成规范事实、分类体验、查询投影和发布门禁，最后以真实 v5 候选完成联合切换；App 分离当前 v5、兼容上一 v5 和固定旧 v4 三种生命周期。
 
 ## 打开决策项
 
-- [条件与来源可信度](decisions/06-condition-and-provenance.md)
-- [关键事实缺口策略](decisions/07-critical-fact-gap-policy.md)
-- [图片质量门槛](decisions/08-image-quality-gate.md)
-- [跨仓库数据契约](decisions/09-cross-repo-data-contract.md)
-- [玩家信息层级原型](decisions/10-information-hierarchy-prototype.md)
-- [搜索与浏览模型](decisions/11-search-and-browse-model.md)
-- [发布质量与真实数据验收](decisions/12-release-quality-and-validation.md)
-- [实施交付图](decisions/13-delivery-slices.md)
+无。当前目的地的产品、领域、数据、架构、发布与实施边界均已关闭。
 
 ## 迷雾
 

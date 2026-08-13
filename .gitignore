@@ -11,3 +11,4 @@ app/src/main/assets/default-data/*.svdata
 .idea/
 .gradle/
 .pi-subagents
+.pi

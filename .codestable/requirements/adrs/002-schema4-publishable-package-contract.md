@@ -1,10 +1,13 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 005
 scope: context:content-package
 date: 2026-07-18
 ---
 
 # ADR 002：只激活发布级 schema 4 数据包
+
+> 本决定已由 [ADR 005：只激活并类型化消费 player-facts-v1 数据包](005-player-facts-v1-package-and-consumption.md) 替代。下文保留当时决定。
 
 ## 背景
 

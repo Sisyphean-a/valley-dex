@@ -13,7 +13,7 @@ scope: workspace
 
 ## 领域入口
 
-- [context:content-package](../requirements/contexts/content-package.md)：`.svdata` 发布契约、校验、激活和回滚。
+- [context:content-package](../requirements/contexts/content-package.md)：manifest 2 / schema 5 / `player-facts-v1` 发布契约、校验、激活和回滚；见 [ADR 005](../requirements/adrs/005-player-facts-v1-package-and-consumption.md)。
 - [context:offline-encyclopedia](../requirements/contexts/offline-encyclopedia.md)：语义目录、条目阅读、搜索、关系和个人连续性。
 - [workspace 作用域地图](../requirements/CONTEXT.md)：项目共同的离线、隐私和数据边界。
 
