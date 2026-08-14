@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.outlined.ImageNotSupported
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -44,6 +45,45 @@ fun EntityImage(
             filterQuality = FilterQuality.None,
             onError = { failed = true },
         )
+    }
+}
+
+@Composable
+fun EntryImageStatus(
+    status: com.example.stardewoffline.core.model.EntryImage,
+    packageRoot: File?,
+    name: String,
+    categoryLabel: String?,
+    modifier: Modifier = Modifier,
+) {
+    when (status) {
+        is com.example.stardewoffline.core.model.EntryImage.Packaged ->
+            EntityImage(status.relativePath, packageRoot, name, modifier, categoryLabel)
+        com.example.stardewoffline.core.model.EntryImage.Proxy ->
+            StatusImage(name, "${name} 使用展示代理视觉", categoryLabel, modifier)
+        com.example.stardewoffline.core.model.EntryImage.PackageError ->
+            StatusImage(name, "${name} 图片异常", categoryLabel, modifier, error = true)
+        com.example.stardewoffline.core.model.EntryImage.Missing ->
+            StatusImage(name, "$name 暂无图片", categoryLabel, modifier)
+    }
+}
+
+@Composable
+private fun StatusImage(
+    name: String,
+    description: String,
+    categoryLabel: String?,
+    modifier: Modifier,
+    error: Boolean = false,
+) {
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (error) Icons.Outlined.Warning else missingImageIcon(categoryLabel),
+                contentDescription = description,
+                tint = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

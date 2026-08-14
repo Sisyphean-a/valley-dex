@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.model.WikiEntry
-import com.example.stardewoffline.data.ContentRepository
+import com.example.stardewoffline.data.Schema5ContentRepository
 import com.example.stardewoffline.data.UserDataRepository
 import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +27,7 @@ data class DetailUiState(
 class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val catalogue: WikiCatalogue,
-    private val content: ContentRepository,
+    private val content: Schema5ContentRepository,
     private val user: UserDataRepository,
 ) : ViewModel() {
     private val id = checkNotNull<String>(savedStateHandle["id"])
@@ -55,7 +55,10 @@ class DetailViewModel @Inject constructor(
         }
         when (result) {
             is AppResult.Success -> {
-                mutableState.value = DetailUiState(entry = result.value, packageRoot = content.packageRoot())
+                mutableState.value = DetailUiState(
+                    entry = result.value,
+                    packageRoot = content.packageRoot(),
+                )
                 user.recordView(id)
             }
             is AppResult.Failure -> mutableState.value = DetailUiState(error = result.error.message)

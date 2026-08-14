@@ -28,6 +28,20 @@ class AppPreferencesRepository @Inject constructor(
 
     suspend fun setPreviousPackage(id: String?) = edit { values -> values.setOrRemove(PREVIOUS_PACKAGE_ID, id) }
 
+    suspend fun setPreviousCompatibleV5Package(id: String?) =
+        edit { values -> values.setOrRemove(PREVIOUS_COMPATIBLE_V5_PACKAGE_ID, id) }
+
+    suspend fun setPinnedLegacyV4Package(id: String?) =
+        edit { values -> values.setOrRemove(PINNED_LEGACY_V4_PACKAGE_ID, id) }
+
+    suspend fun setLegacyRecoveryState(
+        activePackageId: String?,
+        pinnedLegacyV4PackageId: String?,
+    ) = update { values ->
+        values.setOrRemove(ACTIVE_PACKAGE_ID, activePackageId)
+        values.setOrRemove(PINNED_LEGACY_V4_PACKAGE_ID, pinnedLegacyV4PackageId)
+    }
+
     suspend fun setLastValidatedPackage(id: String?) = edit { values -> values.setOrRemove(LAST_VALIDATED_PACKAGE_ID, id) }
 
     suspend fun setThemeMode(value: String) = edit { it[THEME_MODE] = value }
@@ -49,6 +63,8 @@ class AppPreferencesRepository @Inject constructor(
     private fun toAppPreferences(values: Preferences) = AppPreferences(
         activePackageId = values[ACTIVE_PACKAGE_ID],
         previousPackageId = values[PREVIOUS_PACKAGE_ID],
+        previousCompatibleV5PackageId = values[PREVIOUS_COMPATIBLE_V5_PACKAGE_ID],
+        pinnedLegacyV4PackageId = values[PINNED_LEGACY_V4_PACKAGE_ID],
         lastValidatedPackageId = values[LAST_VALIDATED_PACKAGE_ID],
         themeMode = values[THEME_MODE] ?: "system",
         dynamicColorEnabled = values[DYNAMIC_COLOR_ENABLED] ?: false,
@@ -64,6 +80,8 @@ class AppPreferencesRepository @Inject constructor(
     private companion object {
         val ACTIVE_PACKAGE_ID = stringPreferencesKey("active_package_id")
         val PREVIOUS_PACKAGE_ID = stringPreferencesKey("previous_package_id")
+        val PREVIOUS_COMPATIBLE_V5_PACKAGE_ID = stringPreferencesKey("previous_compatible_v5_package_id")
+        val PINNED_LEGACY_V4_PACKAGE_ID = stringPreferencesKey("pinned_legacy_v4_package_id")
         val LAST_VALIDATED_PACKAGE_ID = stringPreferencesKey("last_validated_package_id")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("dynamic_color_enabled")

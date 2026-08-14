@@ -4,7 +4,7 @@ import com.example.stardewoffline.core.model.SearchQuery
 import java.text.Normalizer
 import java.util.Locale
 
-object SearchQueryNormalizer {
+internal object SearchQueryNormalizer {
     fun normalize(raw: String): SearchQuery? {
         val normalized = Normalizer.normalize(raw, Normalizer.Form.NFKC)
             .trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT).take(64)

@@ -19,9 +19,8 @@ import com.example.stardewoffline.core.datapackage.DataPackageManager
 import com.example.stardewoffline.core.datapackage.DataPackageValidator
 import com.example.stardewoffline.core.datapackage.SafeZipExtractor
 import com.example.stardewoffline.core.datastore.AppPreferencesRepository
-import com.example.stardewoffline.data.ContentRepository
 import com.example.stardewoffline.data.DataPackageRepository
-import com.example.stardewoffline.data.SearchRepository
+import com.example.stardewoffline.data.Schema5ContentRepository
 import com.example.stardewoffline.data.UserDataRepository
 import java.io.File
 import java.util.UUID
@@ -32,11 +31,10 @@ class TestAppScenario private constructor(
     val context: Context,
     val dataPackages: DataPackageManager,
     val packageRepository: DataPackageRepository,
-    val contentRepository: ContentRepository,
-    val searchRepository: SearchRepository,
+    val schema5ContentRepository: Schema5ContentRepository,
     val userRepository: UserDataRepository,
     val preferences: AppPreferencesRepository,
-    private val contentDatabases: ContentDatabaseManager,
+    val contentDatabases: ContentDatabaseManager,
     private val userDatabase: UserDatabase,
     private val workspace: File,
 ) {
@@ -58,7 +56,7 @@ class TestAppScenario private constructor(
             File(testContext.filesDir, "content").deleteRecursively()
             val factory = ContentDatabaseFactory(Dispatchers.IO)
             val validator = DataPackageValidator(testJson, HashUtils(Dispatchers.IO), factory, Dispatchers.IO)
-            val databases = ContentDatabaseManager(testContext, preferences, factory, Dispatchers.IO)
+            val databases = ContentDatabaseManager(testContext, preferences, factory, testJson, Dispatchers.IO)
             val manager = DataPackageManager(
                 testContext,
                 DataPackageInstaller(testContext, SafeZipExtractor(Dispatchers.IO), validator, Dispatchers.IO),
@@ -68,12 +66,12 @@ class TestAppScenario private constructor(
                 Dispatchers.IO,
             )
             val userDatabase = Room.inMemoryDatabaseBuilder(testContext, UserDatabase::class.java).build()
+            val schema5ContentRepository = Schema5ContentRepository(databases)
             return TestAppScenario(
                 context = testContext,
                 dataPackages = manager,
                 packageRepository = DataPackageRepository(testContext, manager, Dispatchers.IO),
-                contentRepository = ContentRepository(manager, databases),
-                searchRepository = SearchRepository(manager, databases, Dispatchers.Default),
+                schema5ContentRepository = schema5ContentRepository,
                 userRepository = UserDataRepository(userDatabase.userDataDao()),
                 preferences = preferences,
                 contentDatabases = databases,

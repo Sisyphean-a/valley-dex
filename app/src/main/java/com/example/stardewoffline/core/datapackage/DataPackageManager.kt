@@ -51,14 +51,32 @@ class DataPackageManager @Inject constructor(
                         contentDatabaseManager.close()
                         activeInfo = null
                     }
-                    val retainedPreviousId = if (staged.info.id == previous.activePackageId) {
-                        previous.previousPackageId
+                    val isV5 = staged.info.manifest.schemaVersion == DataPackageContract.V5_SCHEMA_VERSION
+                    val legacyToPin = if (isV5) {
+                        validatedLegacyPinId(previous.activePackageId, previous.pinnedLegacyV4PackageId)
                     } else {
-                        previous.activePackageId
+                        null
+                    }
+                    if (!isV5) {
+                        return@withLock AppResult.Failure(AppError.UnsupportedSchema(staged.info.manifest.schemaVersion))
+                    }
+                    val retainedPreviousId = if (isV5) {
+                        if (staged.info.id == previous.activePackageId) {
+                            previous.previousCompatibleV5PackageId
+                        } else {
+                            previous.activePackageId?.takeIf {
+                                packageSchemaVersion(it) == DataPackageContract.V5_SCHEMA_VERSION
+                            }
+                        }
+                    } else {
+                        null
                     }
                     val retainedBeforeCommit = setOfNotNull(
                         previous.activePackageId,
                         previous.previousPackageId,
+                        previous.previousCompatibleV5PackageId,
+                        previous.pinnedLegacyV4PackageId,
+                        legacyToPin,
                         staged.info.id,
                     )
                     cleanupPackages(retainedBeforeCommit)?.let { error ->
@@ -75,7 +93,17 @@ class DataPackageManager @Inject constructor(
                     when (val activated = switchToLocked(installed.info.id, retainedPreviousId, installed.info)) {
                         is AppResult.Success -> when (val finalized = installer.finalize(installed)) {
                             is AppResult.Success -> {
-                                cleanupPackages(setOfNotNull(installed.info.id, retainedPreviousId))?.let { error ->
+                                if (legacyToPin != null) {
+                                    preferences.setPinnedLegacyV4Package(legacyToPin)
+                                }
+                                cleanupPackages(
+                                    setOfNotNull(
+                                        installed.info.id,
+                                        retainedPreviousId,
+                                        previous.pinnedLegacyV4PackageId,
+                                        legacyToPin,
+                                    )
+                                )?.let { error ->
                                     Log.e(TAG, "新数据包已启用，但旧数据包清理失败：${error.message}")
                                 }
                                 preferences.setLastValidatedPackage(installed.info.id)
@@ -109,6 +137,8 @@ class DataPackageManager @Inject constructor(
         }
         preferences.setActivePackage(previous.activePackageId)
         preferences.setPreviousPackage(previous.previousPackageId)
+        preferences.setPreviousCompatibleV5Package(previous.previousCompatibleV5PackageId)
+        preferences.setPinnedLegacyV4Package(previous.pinnedLegacyV4PackageId)
         preferences.setLastValidatedPackage(previous.lastValidatedPackageId)
         val reopened = previous.activePackageId?.let { openActiveLocked() }
         return if (reopened is AppResult.Failure) AppResult.Failure(reopened.error) else AppResult.Failure(cause)
@@ -154,12 +184,18 @@ class DataPackageManager @Inject constructor(
         lifecycleMutex.withLock {
             val current = preferences.current()
             val packageId = current.activePackageId ?: return@withLock AppResult.Failure(AppError.NoDataPackage)
+            if (packageSchemaVersion(packageId) != DataPackageContract.V5_SCHEMA_VERSION) {
+                deactivateInvalidPackageLocked(current.previousCompatibleV5PackageId)
+                return@withLock AppResult.Failure(AppError.UnsupportedSchema(packageSchemaVersion(packageId) ?: -1))
+            }
             val verified = validator.validate(packageRoot(packageId))
             if (verified is AppResult.Success) {
                 preferences.setLastValidatedPackage(packageId)
                 activeInfo = verified.value
             } else {
-                deactivateInvalidPackageLocked(current.previousPackageId)
+                deactivateInvalidPackageLocked(
+                    current.previousCompatibleV5PackageId ?: current.previousPackageId
+                )
             }
             verified
         }
@@ -168,17 +204,95 @@ class DataPackageManager @Inject constructor(
     suspend fun rollback(): AppResult<DataPackageInfo> = withContext(ioDispatcher) {
         lifecycleMutex.withLock {
             val current = preferences.current()
-            val previous = current.previousPackageId ?: return@withLock AppResult.Failure(AppError.NoDataPackage)
+            val previous = current.previousCompatibleV5PackageId
+                ?: return@withLock AppResult.Failure(AppError.NoDataPackage)
             switchToLocked(previous, current.activePackageId)
+        }
+    }
+
+    /**
+     * Explicitly records a frozen schema-4 recovery package without activating it.
+     * Schema 4 never enters the current App's ordinary install or rollback path.
+     */
+    suspend fun pinLegacyV4Recovery(packageRoot: File): AppResult<Unit> = withContext(ioDispatcher) {
+        lifecycleMutex.withLock {
+            val info = validator.validateLegacyRecovery(packageRoot)
+                ?: return@withLock AppResult.Failure(AppError.InvalidManifest("旧 v4 恢复包校验失败"))
+            if (info.manifest.schemaVersion != 4) {
+                return@withLock AppResult.Failure(AppError.UnsupportedSchema(info.manifest.schemaVersion))
+            }
+            val packageId = info.id
+            val source = packageRoot.canonicalFile
+            val destination = packageRoot(packageId).canonicalFile
+            if (source == destination) {
+                return@withLock AppResult.Failure(AppError.InvalidManifest("旧 v4 恢复包不能位于活动包目录"))
+            }
+            if (destination.exists()) {
+                return@withLock AppResult.Failure(AppError.InvalidManifest("旧 v4 恢复包 ID 已存在"))
+            }
+            if (
+                destination.path.startsWith(source.path + File.separator) ||
+                source.path.startsWith(destination.path + File.separator)
+            ) {
+                return@withLock AppResult.Failure(AppError.InvalidManifest("旧 v4 恢复包目录嵌套无效"))
+            }
+            val staging = File(packagesRoot(), ".legacy-${packageId}.${System.nanoTime()}.staging").canonicalFile
+            if (staging.exists()) staging.deleteRecursively()
+            staging.parentFile?.mkdirs()
+            try {
+                source.copyRecursively(staging, overwrite = false)
+                if (!staging.renameTo(destination)) {
+                    throw IllegalStateException("无法原子提交旧 v4 恢复包")
+                }
+            } catch (error: Exception) {
+                staging.deleteRecursively()
+                return@withLock AppResult.Failure(AppError.Unknown(error.message ?: "无法保存旧 v4 恢复包"))
+            }
+            val current = preferences.current()
+            val wasActive = current.activePackageId == packageId
+            var preferencesCommitted = false
+            try {
+                preferences.setLegacyRecoveryState(
+                    activePackageId = current.activePackageId?.takeUnless { wasActive },
+                    pinnedLegacyV4PackageId = packageId,
+                )
+                preferencesCommitted = true
+                if (wasActive) {
+                    contentDatabaseManager.close()
+                    activeInfo = null
+                }
+                AppResult.Success(Unit)
+            } catch (error: Exception) {
+                if (preferencesCommitted) {
+                    runCatching {
+                        preferences.setLegacyRecoveryState(
+                            activePackageId = current.activePackageId,
+                            pinnedLegacyV4PackageId = current.pinnedLegacyV4PackageId,
+                        )
+                    }
+                }
+                destination.deleteRecursively()
+                AppResult.Failure(AppError.Unknown(error.message ?: "无法保存旧 v4 恢复状态"))
+            }
         }
     }
 
     suspend fun deletePreviousPackage(): AppResult<Unit> = withContext(ioDispatcher) {
         lifecycleMutex.withLock {
-            val previous = preferences.current().previousPackageId ?: return@withLock AppResult.Success(Unit)
+            val current = preferences.current()
+            val previous = current.previousCompatibleV5PackageId
+                ?: current.previousPackageId
+                ?: return@withLock AppResult.Success(Unit)
+            if (previous == current.pinnedLegacyV4PackageId || packageSchemaVersion(previous) == 4) {
+                return@withLock AppResult.Failure(AppError.InvalidManifest("固定旧 v4 数据包只能通过显式发布决定清理"))
+            }
             val directory = packageRoot(previous)
             if (directory.exists() && !directory.deleteRecursively()) return@withLock AppResult.Failure(AppError.Unknown("无法删除旧数据包"))
-            preferences.setPreviousPackage(null)
+            if (current.previousCompatibleV5PackageId == previous) {
+                preferences.setPreviousCompatibleV5Package(null)
+            } else {
+                preferences.setPreviousPackage(null)
+            }
             AppResult.Success(Unit)
         }
     }
@@ -191,7 +305,7 @@ class DataPackageManager @Inject constructor(
         contentDatabaseManager.close()
         activeInfo = null
         preferences.setLastValidatedPackage(null)
-        val fallback = previousId?.let { id ->
+        val fallback = previousId?.takeIf { packageSchemaVersion(it) == DataPackageContract.V5_SCHEMA_VERSION }?.let { id ->
             when (val validation = validator.validate(packageRoot(id))) {
                 is AppResult.Success -> id to validation.value
                 is AppResult.Failure -> null
@@ -200,13 +314,15 @@ class DataPackageManager @Inject constructor(
         if (fallback == null) {
             preferences.setActivePackage(null)
             preferences.setPreviousPackage(null)
+            preferences.setPreviousCompatibleV5Package(null)
             return
         }
 
         val (fallbackId, info) = fallback
         preferences.setActivePackage(fallbackId)
         preferences.setPreviousPackage(null)
-        if (contentDatabaseManager.openActive() is AppResult.Success) {
+        preferences.setPreviousCompatibleV5Package(null)
+        if (contentDatabaseManager.openActiveSchema5() is AppResult.Success) {
             activeInfo = info
             preferences.setLastValidatedPackage(fallbackId)
             return
@@ -220,17 +336,20 @@ class DataPackageManager @Inject constructor(
         val packageId = preferences.current().activePackageId
             ?: return AppResult.Failure(AppError.NoDataPackage)
         activeInfo?.takeIf { it.id == packageId }?.let { return AppResult.Success(it) }
-
-        val opened = contentDatabaseManager.openActive()
-        val database = opened.getOrNull()
-            ?: return AppResult.Failure(opened.failureOrNull() ?: AppError.NoDataPackage)
-        val manifest = validator.readManifest(packageRoot(packageId)).getOrNull()
+        val root = packageRoot(packageId)
+        val manifest = validator.readManifest(root).getOrNull()
             ?: return AppResult.Failure(AppError.InvalidManifest("当前数据包缺少 manifest.json"))
-        val meta = database.getBuildMeta().getOrNull()
-            ?: return AppResult.Failure(AppError.DatabaseQueryFailed("无法读取当前数据版本"))
-        val info = DataPackageInfo(packageId, manifest, meta, missingImageCount = 0)
-        activeInfo = info
-        return AppResult.Success(info)
+        if (manifest.schemaVersion != DataPackageContract.V5_SCHEMA_VERSION) {
+            return AppResult.Failure(AppError.UnsupportedSchema(manifest.schemaVersion))
+        }
+        val validated = validator.validate(root)
+        val info = validated.getOrNull()
+            ?: return AppResult.Failure(validated.failureOrNull() ?: AppError.DatabaseCorrupted("当前数据包校验失败"))
+        val opened = contentDatabaseManager.openActiveSchema5()
+        if (opened is AppResult.Failure) return opened
+        val boundInfo = info.copy(id = packageId)
+        activeInfo = boundInfo
+        return AppResult.Success(boundInfo)
     }
 
     private suspend fun switchToLocked(
@@ -238,17 +357,40 @@ class DataPackageManager @Inject constructor(
         fallbackId: String?,
         knownInfo: DataPackageInfo? = null,
     ): AppResult<DataPackageInfo> {
+        val validatedTarget = when (val result = validator.validate(packageRoot(targetId))) {
+            is AppResult.Success -> result.value
+            is AppResult.Failure -> return result
+        }
         contentDatabaseManager.close()
         activeInfo = null
         preferences.setActivePackage(targetId)
-        val opened = contentDatabaseManager.openActive()
+        val schema = packageSchemaVersion(targetId)
+        if (schema != DataPackageContract.V5_SCHEMA_VERSION) {
+            preferences.setActivePackage(fallbackId)
+            return AppResult.Failure(AppError.UnsupportedSchema(schema ?: -1))
+        }
+        val opened = contentDatabaseManager.openActiveSchema5()
         if (opened is AppResult.Success) {
-            preferences.setPreviousPackage(fallbackId?.takeIf { it != targetId })
-            if (knownInfo != null) {
-                activeInfo = knownInfo
-                return AppResult.Success(knownInfo)
+            val previous = fallbackId?.takeIf { it != targetId }
+            if (knownInfo?.manifest?.schemaVersion == DataPackageContract.V5_SCHEMA_VERSION ||
+                packageSchemaVersion(targetId) == DataPackageContract.V5_SCHEMA_VERSION
+            ) {
+                preferences.setPreviousCompatibleV5Package(previous)
+                preferences.setPreviousPackage(null)
+            } else {
+                preferences.setPreviousPackage(previous)
             }
-            return openActiveLocked()
+            if (knownInfo != null) {
+                activeInfo = knownInfo.copy(
+                    id = targetId,
+                    manifest = validatedTarget.manifest,
+                    buildMeta = validatedTarget.buildMeta,
+                    missingImageCount = validatedTarget.missingImageCount,
+                )
+                return AppResult.Success(activeInfo!!)
+            }
+            activeInfo = validatedTarget.copy(id = targetId)
+            return AppResult.Success(activeInfo!!)
         }
 
         preferences.setActivePackage(fallbackId)
@@ -261,6 +403,27 @@ class DataPackageManager @Inject constructor(
         val stale = packagesRoot().listFiles().orEmpty().filter { it.isDirectory && it.name !in retained }
         return if (stale.any { !it.deleteRecursively() }) AppError.Unknown("无法清理旧数据包") else null
     }
+
+    private suspend fun validatedLegacyPinId(
+        activePackageId: String?,
+        pinnedLegacyId: String?,
+    ): String? {
+        val candidate = activePackageId?.takeIf {
+            packageSchemaVersion(it) == DataPackageContract.LEGACY_V4_SCHEMA_VERSION && pinnedLegacyId == null
+        } ?: return null
+        return if (validator.validateLegacyRecovery(packageRoot(candidate)) != null) {
+            candidate
+        } else {
+            Log.w(TAG, "活动 v4 恢复包校验失败，不写入 pinned legacy 状态：$candidate")
+            null
+        }
+    }
+
+    private fun packageSchemaVersion(id: String): Int? = runCatching {
+        val root = packageRoot(id)
+        if (!File(root, "manifest.json").isFile) return@runCatching null
+        validator.readManifest(root).getOrNull()?.schemaVersion
+    }.getOrNull()
 
     private fun packageRoot(id: String): File = File(packagesRoot(), id)
     private fun packagesRoot(): File = File(context.filesDir, "content/packages")

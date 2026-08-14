@@ -49,7 +49,7 @@ import com.example.stardewoffline.core.datastore.AppPreferencesRepository
 import com.example.stardewoffline.core.model.CataloguePage
 import com.example.stardewoffline.core.model.CatalogueQuery
 import com.example.stardewoffline.core.ui.component.WikiEntryGridItem
-import com.example.stardewoffline.data.ContentRepository
+import com.example.stardewoffline.data.Schema5ContentRepository
 import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
@@ -75,7 +75,7 @@ data class CatalogueUiState(
 class TypeListViewModel @Inject constructor(
     saved: SavedStateHandle,
     private val catalogue: WikiCatalogue,
-    private val content: ContentRepository,
+    private val content: Schema5ContentRepository,
     private val preferences: AppPreferencesRepository,
 ) : ViewModel() {
     private val categoryId = checkNotNull<String>(saved["categoryId"])
@@ -84,6 +84,7 @@ class TypeListViewModel @Inject constructor(
     val state = mutableState.asStateFlow()
     val root = mutableRoot.asStateFlow()
     private var reloadJob: Job? = null
+    private var loadMoreJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -106,6 +107,48 @@ class TypeListViewModel @Inject constructor(
 
     fun retry() = reload()
 
+    fun loadMore() {
+        val current = mutableState.value
+        val page = current.page ?: return
+        val cursor = page.nextCursor ?: return
+        if (current.isLoading || loadMoreJob?.isActive == true) return
+        loadMoreJob = viewModelScope.launch {
+            mutableState.value = current.copy(isLoading = true, error = null)
+            val result = try {
+                catalogue.entries(
+                    CatalogueQuery(
+                        categoryId = categoryId,
+                        keyword = current.keyword,
+                        entryCategory = current.selectedEntryCategory,
+                        cursor = cursor,
+                    ),
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (throwable: Throwable) {
+                val latest = mutableState.value
+                if (latest.keyword == current.keyword && latest.selectedEntryCategory == current.selectedEntryCategory) {
+                    mutableState.value = latest.copy(isLoading = false, error = "读取更多分类失败：${throwable.message ?: throwable::class.simpleName}")
+                }
+                return@launch
+            }
+            val latest = mutableState.value
+            if (latest.keyword != current.keyword || latest.selectedEntryCategory != current.selectedEntryCategory) return@launch
+            mutableState.value = when (result) {
+                is AppResult.Success -> latest.copy(
+                    page = page.copy(
+                        entries = (page.entries + result.value.entries).distinctBy { it.id },
+                        availableEntryCategories = (page.availableEntryCategories + result.value.availableEntryCategories).distinct().sorted(),
+                        nextCursor = result.value.nextCursor,
+                    ),
+                    isLoading = false,
+                    error = null,
+                )
+                is AppResult.Failure -> latest.copy(isLoading = false, error = result.error.message)
+            }
+        }
+    }
+
     /**
      * Flow: only the latest keyword/category request can update the page.
      * Failure: query errors stay visible instead of becoming an empty Compose tree.
@@ -116,6 +159,7 @@ class TypeListViewModel @Inject constructor(
             if (delayMillis > 0) delay(delayMillis)
             val requested = mutableState.value
             mutableState.value = requested.copy(isLoading = true, error = null)
+            loadMoreJob?.cancel()
             val result = try {
                 catalogue.entries(
                     CatalogueQuery(
@@ -157,7 +201,7 @@ fun TypeListRoute(
     val root by viewModel.root.collectAsState()
     val page = state.page
     when {
-        page != null -> CatalogueContent(page, state, root, onDetail, onBack, viewModel::updateKeyword, viewModel::selectEntryCategory)
+        page != null -> CatalogueContent(page, state, root, onDetail, onBack, viewModel::updateKeyword, viewModel::selectEntryCategory, viewModel::loadMore)
         state.isLoading -> CatalogueLoading(onBack)
         else -> CatalogueError(state.error ?: "无法加载分类", onBack, viewModel::retry)
     }
@@ -174,6 +218,7 @@ private fun CatalogueContent(
     onBack: () -> Unit,
     onKeywordChange: (String) -> Unit,
     onSelectEntryCategory: (String?) -> Unit,
+    onLoadMore: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
@@ -215,20 +260,31 @@ private fun CatalogueContent(
                 Text("当前条件下没有匹配条目", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            LazyVerticalGrid(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                columns = GridCells.Fixed(4),
-                contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(page.entries, key = { it.id }) { entry ->
-                    WikiEntryGridItem(
-                        entry = entry,
-                        packageRoot = root,
-                        showCategoryLabel = page.category.entityTypes.size > 1,
-                        onClick = { onDetail(entry.id) },
-                    )
+            Column(Modifier.weight(1f).fillMaxWidth()) {
+                LazyVerticalGrid(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    columns = GridCells.Fixed(4),
+                    contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(page.entries, key = { it.id }) { entry ->
+                        WikiEntryGridItem(
+                            entry = entry,
+                            packageRoot = root,
+                            showCategoryLabel = page.category.entityTypes.size > 1,
+                            onClick = { onDetail(entry.id) },
+                        )
+                    }
+                }
+                if (page.nextCursor != null) {
+                    Button(
+                        onClick = onLoadMore,
+                        enabled = !state.isLoading,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    ) {
+                        Text(if (state.isLoading) "正在加载…" else "加载更多资料")
+                    }
                 }
             }
         }

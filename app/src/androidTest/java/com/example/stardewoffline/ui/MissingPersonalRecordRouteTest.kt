@@ -15,9 +15,8 @@ import com.example.stardewoffline.feature.favorites.FavoritesRoute
 import com.example.stardewoffline.feature.favorites.FavoritesViewModel
 import com.example.stardewoffline.feature.history.HistoryRoute
 import com.example.stardewoffline.feature.history.HistoryViewModel
-import com.example.stardewoffline.data.EntityRelationResolver
-import com.example.stardewoffline.data.wiki.DefaultWikiCatalogue
-import com.example.stardewoffline.testsupport.SyntheticDataPackageFactory
+import com.example.stardewoffline.data.wiki.Schema5WikiCatalogue
+import com.example.stardewoffline.testsupport.SyntheticSchema5DataPackageFactory
 import com.example.stardewoffline.testsupport.SyntheticPackageVariant
 import com.example.stardewoffline.testsupport.TestAppScenario
 import com.example.stardewoffline.testsupport.TestHostActivity
@@ -45,7 +44,7 @@ class MissingPersonalRecordRouteTest {
                     FavoritesViewModel(
                         scenario.userRepository,
                         catalogue(scenario),
-                        scenario.contentRepository,
+                        scenario.schema5ContentRepository,
                         scenario.preferences,
                     )
                 })),
@@ -90,7 +89,7 @@ class MissingPersonalRecordRouteTest {
     }
 
     private suspend fun import(scenario: TestAppScenario, variant: SyntheticPackageVariant) {
-        SyntheticDataPackageFactory(context).create(variant).use { fixture ->
+        SyntheticSchema5DataPackageFactory(context).create(variant).use { fixture ->
             check(scenario.dataPackages.installAndActivate(fixture.archive.inputStream()) is AppResult.Success)
         }
     }
@@ -103,12 +102,7 @@ class MissingPersonalRecordRouteTest {
         }
     }
 
-    private fun catalogue(scenario: TestAppScenario) = DefaultWikiCatalogue(
-        scenario.dataPackages,
-        scenario.contentRepository,
-        EntityRelationResolver(scenario.contentRepository),
-        scenario.searchRepository,
-    )
+    private fun catalogue(scenario: TestAppScenario) = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository)
 
     private fun waitForMissingRecord() {
         composeRule.waitUntil(TIMEOUT) { composeRule.onAllNodesWithText("当前数据包中已不存在").fetchSemanticsNodes().isNotEmpty() }

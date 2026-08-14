@@ -53,7 +53,7 @@ import com.example.stardewoffline.core.model.RelationTarget
 import com.example.stardewoffline.core.model.WikiEntry
 import com.example.stardewoffline.core.model.WikiEntrySubmenu
 import com.example.stardewoffline.core.model.WikiEntrySubmenuItem
-import com.example.stardewoffline.core.ui.component.EntityImage
+import com.example.stardewoffline.core.ui.component.EntryImageStatus
 
 private val DetailGreen = Color(0xFF163F37)
 private val DetailGold = Color(0xFFE1AD4B)
@@ -118,10 +118,8 @@ private fun DetailTopBar(name: String, favorite: Boolean, onBack: () -> Unit, on
 private fun DetailHeader(entry: WikiEntry, packageRoot: java.io.File?, modifier: Modifier) {
     Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = DetailGreen, shadowElevation = 3.dp) {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            entry.image.relativePath()?.let { imagePath ->
-                Surface(color = Color(0xFFEFE8D9), shape = MaterialTheme.shapes.medium, modifier = Modifier.size(92.dp)) {
-                    EntityImage(imagePath, packageRoot, entry.title, modifier = Modifier.padding(6.dp), categoryLabel = entry.categoryLabel)
-                }
+            Surface(color = Color(0xFFEFE8D9), shape = MaterialTheme.shapes.medium, modifier = Modifier.size(92.dp)) {
+                EntryImageStatus(entry.image, packageRoot, entry.title, entry.categoryLabel, Modifier.padding(6.dp))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(entry.title, style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -255,7 +253,7 @@ private fun RelationCard(relation: EntryRelation, packageRoot: java.io.File?, on
     val details = relation.details + listOfNotNull(sellPrice)
     Surface(modifier = Modifier.fillMaxWidth().then(if (entry == null) Modifier else Modifier.clickable { onDetail(entry.id) }), shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            entry?.image?.relativePath()?.let { imagePath -> EntityImage(imagePath, packageRoot, entry.title, modifier = Modifier.size(48.dp)) }
+            entry?.let { EntryImageStatus(it.image, packageRoot, it.title, null, Modifier.size(48.dp)) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 if (relation.label != relation.section) Text(relation.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(relation.target.displayText(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)

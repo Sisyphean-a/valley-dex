@@ -5,9 +5,9 @@ import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
 import java.io.File
 import com.example.stardewoffline.core.model.CatalogueQuery
-import com.example.stardewoffline.data.wiki.DefaultWikiCatalogue
-import com.example.stardewoffline.testsupport.SyntheticDataPackageFactory
+import com.example.stardewoffline.data.wiki.Schema5WikiCatalogue
 import com.example.stardewoffline.testsupport.SyntheticPackageVariant
+import com.example.stardewoffline.testsupport.SyntheticSchema5DataPackageFactory
 import com.example.stardewoffline.testsupport.TestAppScenario
 import com.example.stardewoffline.testsupport.instrumentationTestContext
 import kotlinx.coroutines.runBlocking
@@ -82,6 +82,54 @@ class WikiCatalogueTest {
     }
 
     @Test
+    fun typedFacetFilterUsesSchema5BrowseFacets() = runBlocking {
+        val scenario = TestAppScenario.create(context)
+        try {
+            SyntheticSchema5DataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
+                check(scenario.dataPackages.installAndActivate(fixture.archive.inputStream()) is AppResult.Success)
+            }
+            val spring = catalogue(scenario).entries(
+                CatalogueQuery("type:crop", entryCategory = "春季"),
+            ).getOrNull() ?: error("季节筛选失败")
+            assertEquals(listOf("crop:1"), spring.entries.map { it.id })
+            val winter = catalogue(scenario).entries(
+                CatalogueQuery("type:crop", entryCategory = "冬季"),
+            ).getOrNull() ?: error("空结果筛选失败")
+            assertTrue(winter.entries.isEmpty())
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun typedFactItemConditionIsKeptInReadableEntry() = runBlocking {
+        val scenario = TestAppScenario.create(context)
+        try {
+            SyntheticSchema5DataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
+                check(scenario.dataPackages.installAndActivate(fixture.archive.inputStream()) is AppResult.Success)
+            }
+            val entry = catalogue(scenario).entry("fish:1").getOrNull() ?: error("鱼类条目不可用")
+            val values = entry.sections.flatMap { it.facts }.map { it.value }
+            assertTrue(values.any { it.contains("海滩") && it.contains("条件：春季可用") })
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun typedVillagerSupportFactsBecomeReadableSubmenus() = runBlocking {
+        val scenario = readyScenario()
+        try {
+            val entry = catalogue(scenario).entry("villager:Alice").getOrNull() ?: error("村民条目不可用")
+            assertEquals(setOf("日程", "礼物偏好"), entry.submenus.map { it.title }.toSet())
+            assertTrue(entry.submenus.first { it.title == "日程" }.groups.single().items.single().details.any { it.label == "地点" && it.value == "小镇" })
+            assertTrue(entry.submenus.first { it.title == "礼物偏好" }.groups.single().title == "最爱")
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
     fun entryUsesReadableLabelsAndResolvableRelations() = runBlocking {
         val scenario = readyScenario()
         try {
@@ -95,16 +143,11 @@ class WikiCatalogueTest {
         }
     }
 
-    private fun catalogue(scenario: TestAppScenario) = DefaultWikiCatalogue(
-        scenario.dataPackages,
-        scenario.contentRepository,
-        EntityRelationResolver(scenario.contentRepository),
-        scenario.searchRepository,
-    )
+    private fun catalogue(scenario: TestAppScenario) = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository)
 
     private suspend fun readyScenario(): TestAppScenario {
         val scenario = TestAppScenario.create(context)
-        SyntheticDataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
+        SyntheticSchema5DataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
             check(scenario.dataPackages.installAndActivate(fixture.archive.inputStream()) is AppResult.Success)
         }
         return scenario

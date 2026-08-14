@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -37,7 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.datastore.AppPreferencesRepository
 import com.example.stardewoffline.core.ui.component.WikiEntryListItem
-import com.example.stardewoffline.data.ContentRepository
+import com.example.stardewoffline.data.Schema5ContentRepository
 import com.example.stardewoffline.data.SearchQueryNormalizer
 import com.example.stardewoffline.data.UserDataRepository
 import com.example.stardewoffline.data.wiki.WikiCatalogue
@@ -56,7 +57,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val catalogue: WikiCatalogue,
-    private val content: ContentRepository,
+    private val content: Schema5ContentRepository,
     private val user: UserDataRepository,
     private val preferences: AppPreferencesRepository,
 ) : ViewModel() {
@@ -64,18 +65,24 @@ class SearchViewModel @Inject constructor(
     private val mutableResults = MutableStateFlow<List<com.example.stardewoffline.core.model.WikiSearchHit>>(emptyList())
     private val mutableError = MutableStateFlow<String?>(null)
     private val mutableRoot = MutableStateFlow<File?>(null)
+    private val mutableHasMore = MutableStateFlow(false)
+    private val mutableLoading = MutableStateFlow(false)
     val query = mutableQuery.asStateFlow()
     val results = mutableResults.asStateFlow()
     val error = mutableError.asStateFlow()
     val root = mutableRoot.asStateFlow()
+    val hasMore = mutableHasMore.asStateFlow()
+    val loading = mutableLoading.asStateFlow()
     private var searchJob: Job? = null
+    private var loadMoreJob: Job? = null
+    private var nextCursor: String? = null
 
     init {
         val activePackageIds = preferences.preferences.map { it.activePackageId }.distinctUntilChanged()
         viewModelScope.launch {
             activePackageIds.collectLatest {
                 mutableRoot.value = content.packageRoot()
-                mutableResults.value = emptyList()
+                resetPaging()
                 mutableError.value = null
                 if (mutableQuery.value.isNotBlank()) search()
             }
@@ -84,7 +91,34 @@ class SearchViewModel @Inject constructor(
 
     fun updateQuery(value: String) {
         mutableQuery.value = value
+        resetPaging()
         search(DEBOUNCE_MS)
+    }
+
+    fun loadMore() {
+        if (mutableLoading.value || nextCursor == null || mutableQuery.value.isBlank()) return
+        val requestedQuery = mutableQuery.value
+        val cursor = nextCursor ?: return
+        loadMoreJob = viewModelScope.launch {
+            mutableLoading.value = true
+            when (val response = catalogue.searchPage(
+                com.example.stardewoffline.core.model.WikiSearchQuery(
+                    text = requestedQuery,
+                    cursor = cursor,
+                ),
+            )) {
+                is AppResult.Success -> if (mutableQuery.value == requestedQuery && nextCursor == cursor) {
+                    mutableResults.value = (mutableResults.value + response.value.hits)
+                        .distinctBy { it.entry.id }
+                    nextCursor = response.value.nextCursor
+                    mutableHasMore.value = nextCursor != null
+                }
+                is AppResult.Failure -> if (mutableQuery.value == requestedQuery) {
+                    mutableError.value = response.error.message
+                }
+            }
+            mutableLoading.value = false
+        }
     }
 
     fun submitSearch() = viewModelScope.launch {
@@ -94,24 +128,37 @@ class SearchViewModel @Inject constructor(
 
     private fun search(delayMillis: Long = 0) {
         searchJob?.cancel()
+        loadMoreJob?.cancel()
         searchJob = viewModelScope.launch {
             if (delayMillis > 0) delay(delayMillis)
             val requestedQuery = mutableQuery.value
-            when (val response = catalogue.search(com.example.stardewoffline.core.model.WikiSearchQuery(requestedQuery))) {
+            mutableLoading.value = true
+            when (val response = catalogue.searchPage(
+                com.example.stardewoffline.core.model.WikiSearchQuery(text = requestedQuery),
+            )) {
                 is AppResult.Success -> {
                     if (mutableQuery.value == requestedQuery) {
-                        mutableResults.value = response.value
+                        mutableResults.value = response.value.hits
+                        nextCursor = response.value.nextCursor
+                        mutableHasMore.value = nextCursor != null
                         mutableError.value = null
                     }
                 }
                 is AppResult.Failure -> {
                     if (mutableQuery.value == requestedQuery) {
-                        mutableResults.value = emptyList()
+                        resetPaging()
                         mutableError.value = response.error.message
                     }
                 }
             }
+            mutableLoading.value = false
         }
+    }
+
+    private fun resetPaging() {
+        nextCursor = null
+        mutableResults.value = emptyList()
+        mutableHasMore.value = false
     }
 
     private companion object { const val DEBOUNCE_MS = 250L }
@@ -123,6 +170,8 @@ fun SearchRoute(onDetail: (String) -> Unit, viewModel: SearchViewModel = hiltVie
     val results by viewModel.results.collectAsState()
     val error by viewModel.error.collectAsState()
     val root by viewModel.root.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
+    val loading by viewModel.loading.collectAsState()
     SearchScreen(
         query = query,
         results = results,
@@ -130,6 +179,9 @@ fun SearchRoute(onDetail: (String) -> Unit, viewModel: SearchViewModel = hiltVie
         root = root,
         onQuery = viewModel::updateQuery,
         onSubmit = viewModel::submitSearch,
+        onLoadMore = viewModel::loadMore,
+        hasMore = hasMore,
+        loading = loading,
         onDetail = onDetail,
     )
 }
@@ -142,6 +194,9 @@ private fun SearchScreen(
     root: File?,
     onQuery: (String) -> Unit,
     onSubmit: () -> Unit,
+    onLoadMore: () -> Unit,
+    hasMore: Boolean,
+    loading: Boolean,
     onDetail: (String) -> Unit,
 ) {
     LazyColumn(
@@ -184,6 +239,17 @@ private fun SearchScreen(
         }
         items(results, key = { it.entry.id }) { hit ->
             WikiEntryListItem(entry = hit.entry, packageRoot = root, modifier = Modifier.padding(horizontal = 16.dp), onClick = { onDetail(hit.entry.id) })
+        }
+        if (hasMore) {
+            item {
+                Button(
+                    onClick = onLoadMore,
+                    enabled = !loading,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                ) {
+                    Text(if (loading) "正在加载…" else "加载更多结果")
+                }
+            }
         }
     }
 }

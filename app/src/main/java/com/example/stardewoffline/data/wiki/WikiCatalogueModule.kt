@@ -9,5 +9,5 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 abstract class WikiCatalogueModule {
     @Binds
-    abstract fun bindWikiCatalogue(implementation: DefaultWikiCatalogue): WikiCatalogue
+    abstract fun bindWikiCatalogue(implementation: Schema5WikiCatalogue): WikiCatalogue
 }

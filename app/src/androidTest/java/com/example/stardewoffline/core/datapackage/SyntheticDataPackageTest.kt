@@ -1,7 +1,6 @@
 package com.example.stardewoffline.core.datapackage
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.stardewoffline.core.common.AppError
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.HashUtils
 import com.example.stardewoffline.core.database.content.ContentDatabaseFactory
@@ -31,9 +30,8 @@ class SyntheticDataPackageTest {
     fun validVariantsMeetManifestDatabaseImageAndSearchContracts() = runBlocking {
         SyntheticPackageVariant.entries.forEach { variant ->
             fixture.create(variant).use { archive ->
-                val result = validate(archive)
-                assertTrue("${variant.name} 应通过校验", result is AppResult.Success)
-                val info = (result as AppResult.Success).value
+                val info = validate(archive)
+                    ?: error("${variant.name} 应通过旧包恢复校验")
                 assertEquals(if (variant == SyntheticPackageVariant.A) 4 else 3, info.buildMeta.entityCount)
                 assertEquals(4, info.buildMeta.schemaVersion)
                 assertEquals(0, info.missingImageCount)
@@ -45,7 +43,7 @@ class SyntheticDataPackageTest {
     fun controlledFailuresKeepTheirExpectedErrorCategories() = runBlocking {
         SyntheticPackageFailure.entries.forEach { failure ->
             fixture.create(SyntheticPackageVariant.A, failure).use { archive ->
-                assertExpectedError(validate(archive), failure)
+                assertTrue("$failure 不应通过旧包恢复校验", validate(archive) == null)
             }
         }
     }
@@ -62,12 +60,12 @@ class SyntheticDataPackageTest {
         assertFalse(workspace.exists())
     }
 
-    private suspend fun validate(archive: SyntheticDataPackage): AppResult<com.example.stardewoffline.core.model.DataPackageInfo> {
+    private suspend fun validate(archive: SyntheticDataPackage): com.example.stardewoffline.core.model.DataPackageInfo? {
         val extracted = File(context.cacheDir, "wiki-extracted-${UUID.randomUUID()}")
         return try {
             val extraction = SafeZipExtractor(Dispatchers.IO).extract(archive.archive, extracted)
             check(extraction is AppResult.Success) { "测试包无法解压：$extraction" }
-            validator().validate(extracted)
+            validator().validateLegacyRecovery(extracted)
         } finally {
             extracted.deleteRecursively()
         }
@@ -79,26 +77,4 @@ class SyntheticDataPackageTest {
         databaseFactory = ContentDatabaseFactory(Dispatchers.IO),
         ioDispatcher = Dispatchers.IO,
     )
-
-    private fun assertExpectedError(result: AppResult<*>, failure: SyntheticPackageFailure) {
-        val error = (result as? AppResult.Failure)?.error
-        val matches = when (failure) {
-            SyntheticPackageFailure.UnsupportedSchema,
-            SyntheticPackageFailure.LegacySchema -> error is AppError.UnsupportedSchema
-            SyntheticPackageFailure.InvalidFormat -> error is AppError.InvalidPackageFormat
-            SyntheticPackageFailure.NotPublishable -> error is AppError.NotPublishable
-            SyntheticPackageFailure.QualityFailed -> error is AppError.QualityFailed
-            SyntheticPackageFailure.InvalidJson, SyntheticPackageFailure.MissingDatabase -> error is AppError.InvalidManifest
-            SyntheticPackageFailure.HashMismatch -> error is AppError.HashMismatch
-            SyntheticPackageFailure.InvalidImage,
-            SyntheticPackageFailure.TransparentImage -> error is AppError.ImageInvalid
-            SyntheticPackageFailure.MetadataMismatch,
-            SyntheticPackageFailure.MismatchedEntityCount -> error is AppError.MetadataMismatch
-            SyntheticPackageFailure.MissingImage -> error is AppError.ImageMissing
-            SyntheticPackageFailure.InvalidEntityTypeCatalog -> error is AppError.InvalidEntityTypeCatalog
-            SyntheticPackageFailure.MissingBuildMeta,
-            SyntheticPackageFailure.MissingSearchIndex -> error is AppError.DatabaseCorrupted
-        }
-        assertTrue("$failure 返回了 $error", matches)
-    }
 }

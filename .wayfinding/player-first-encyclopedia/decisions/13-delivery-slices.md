@@ -23,6 +23,27 @@
 
 本交付图不引入联网、存档读取、schema 4/5 双语义消费、设备端 v4 转换、运行时 `officialDerived` 回退或第二套 Wiki 数据源。每个切片按可观察结果拆分，不按文件或团队拆分；“审查”“最终集成”不作为独立伪切片。
 
+### 当前检查点（2026-08-14）
+
+本轮以两仓库各一个可回退提交收束当前阶段，不把合成 fixture、编译通过或候选路径接线误报为真实发布完成。
+
+**已封存且有本地验证的结果**
+
+- D0、B1、B2：真实 v4 基线仍在工作区外保留；schema 5 SQLite、manifest 2、`player-facts-v1`、typed facts/conditions/evidence/claim 闭包、视觉/关系/卡片/facet 的 writer 与 conformance fixture 已形成。
+- A1：App 普通安装、活动包校验和兼容回滚严格面向 schema 5；schema 4 仅显式 recovery pin，保留 `active_v5`、`previous_compatible_v5`、`pinned_legacy_v4` 三个生命周期边界。
+- B3/A2/B4：App 已有租约式 typed schema-5 数据库、批量详情读取、来源摘要、正反关系、数据库侧 facet/搜索游标和 Schema5 `WikiCatalogue`；builder 已有真实投影的 staging/candidate、原子 writer、报告/conformance 哈希绑定和独立 package 复验路径。
+- 当前检查点验证：builder `python -m pytest -q` 为 `209 passed`，`python -m ruff check .` 与两仓库 `git diff --check` 通过；App `:app:compileDebugKotlin`、`:app:testDebugUnitTest`、`:app:compileDebugAndroidTestKotlin`、`:app:lintDebug` 在 `--rerun-tasks` 下通过。
+
+**仍未完成、不得在本检查点后隐含关闭的结果**
+
+- C1–C4 的真实官方逐分类核心槽覆盖、全部玩家语义和完整黄金输出仍未完成；尤其 C1 还必须区分金币购买价、兑换成本、条件报价、动态报价和 `not_applicable`。
+- builder 真实官方候选尚未形成可发布 `.svdata`；失败必须继续隔离并保留 `.release-blocked` 诊断。合成 candidate/staging 只证明 writer 与门禁形状，不替代 R1。
+- App 尚无真实 v5 包安装/切换/回滚、connected Android、TalkBack、性能 SLO 和玩家任务回执；R2/R3 未开始。
+
+**下一独立目标：C1 报价语义闭合**
+
+只处理 builder 的官方商店报价到 typed player-facts-v1 的规范映射，并同步必要的 App/fixture 契约：按 `ShopBuilder.GetBasePrice` 对 `Price=-1`、对象价格、`UseObjectDataPrice`、`IgnoreShopPriceModifiers` 和 shop/item modifier 做可审计计算；将金币报价与兑换成本分开，保留商店/offer/条件/source locator 和稳定 scope；crop key 到 seed object 的关联必须有回归；无普通报价的作物只能进入明确的 `not_applicable`/`not_collected`，不得用对象出售价冒充购买价。完成证据为 focused regression、builder 全套门禁、真实报价覆盖诊断和失败输出隔离；不要求在该目标内完成 R1–R3。
+
 ### D0：冻结迁移基线
 
 **归属**：两仓库共同准备，各自保留证据；发布集成人记录内容绑定。

@@ -20,12 +20,15 @@ data class CatalogueQuery(
     val categoryId: String,
     val keyword: String? = null,
     val entryCategory: String? = null,
+    val cursor: String? = null,
+    val pageSize: Int = 60,
 )
 
 data class CataloguePage(
     val category: WikiCategory,
     val entries: List<WikiEntrySummary>,
     val availableEntryCategories: List<String>,
+    val nextCursor: String? = null,
 )
 
 data class WikiEntrySummary(
@@ -36,6 +39,8 @@ data class WikiEntrySummary(
     val filterCategories: Set<String> = emptySet(),
     val image: EntryImage,
     val shop: ShopPresentation? = null,
+    val actionSummary1: String? = null,
+    val actionSummary2: String? = null,
 )
 
 data class ShopPresentation(
@@ -63,6 +68,13 @@ enum class ShopKind {
 data class WikiSearchQuery(
     val text: String,
     val entityTypes: Set<String> = emptySet(),
+    val cursor: String? = null,
+    val pageSize: Int = 60,
+)
+
+data class WikiSearchPage(
+    val hits: List<WikiSearchHit>,
+    val nextCursor: String?,
 )
 
 data class WikiSearchHit(
@@ -126,4 +138,6 @@ sealed interface RelationTarget {
 sealed interface EntryImage {
     data class Packaged(val relativePath: String) : EntryImage
     data object Missing : EntryImage
+    data object Proxy : EntryImage
+    data object PackageError : EntryImage
 }

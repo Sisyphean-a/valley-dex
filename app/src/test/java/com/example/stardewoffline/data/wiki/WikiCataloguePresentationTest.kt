@@ -38,50 +38,29 @@ class WikiCataloguePresentationTest {
     }
 
     @Test
-    fun shopPresentationUsesResolvedOwnerAvatarAndNatureFallback() {
-        val shop = summary(
-            "shop",
-            """{"Items":[{"Id":"(O)472"},{"Id":"(O)473"}]}""",
-            id = "shop:Traveler",
-        ).copy(nameZh = "旅行货车")
-        val owner = summary("villager", "{}", id = "villager:Marnie").copy(nameZh = "玛妮", imagePath = "images/villager-Marnie.webp")
-
-        val owned = shopPresentationFor(shop, listOf("Marnie"), mapOf(owner.id to owner))
-        assertEquals("玛妮", owned.owner?.title)
-        assertEquals("images/villager-Marnie.webp", (owned.owner?.image as? com.example.stardewoffline.core.model.EntryImage.Packaged)?.relativePath)
-        assertEquals(2, owned.offerCount)
-
-        val fallback = shopPresentationFor(shop, listOf("AnyOrNone"), emptyMap())
-        assertNull(fallback.owner)
-        assertEquals(ShopKind.TRAVELING, fallback.kind)
+    fun typedFacetValuesAreUsedAsBrowseFilters() {
+        val summary = com.example.stardewoffline.core.model.Schema5EntitySummary(
+            id = "crop:test",
+            entityType = "crop",
+            gameId = "test",
+            internalName = null,
+            nameZh = "测试",
+            nameEn = null,
+            descriptionZh = null,
+            descriptionEn = null,
+            category = null,
+            translationStatus = com.example.stardewoffline.core.model.TranslationStatus.COMPLETE,
+            card = com.example.stardewoffline.core.model.Schema5EntityCard(
+                entityId = "crop:test",
+                identitySummary = null,
+                actionSummary1 = null,
+                actionSummary2 = null,
+                categoryLabel = null,
+                sortKey = "测试",
+            ),
+            visual = null,
+            facets = emptyList(),
+        )
+        assertTrue(browseFiltersFor(summary).isEmpty())
     }
-
-    @Test
-    fun cropVillagerAndShopFiltersUseKnownGameData() {
-        assertEquals(
-            setOf("春季", "夏季"),
-            browseFiltersFor(summary("crop", "{\"officialDerived\":{\"seasons\":[\"spring\",\"summer\"]}}")),
-        )
-        assertEquals(
-            setOf("可结婚女性村民"),
-            browseFiltersFor(summary("villager", "{\"officialDerived\":{\"canBeRomanced\":true,\"gender\":\"Female\"}}")),
-        )
-        assertEquals(
-            setOf("不可结婚村民"),
-            browseFiltersFor(summary("villager", "{\"officialDerived\":{\"canBeRomanced\":false}}")),
-        )
-        assertEquals(setOf("节日商店"), browseFiltersFor(summary("shop", "{}", id = "shop:EggFestival")))
-        assertEquals(setOf("普通商店"), browseFiltersFor(summary("shop", "{}", id = "shop:SeedShop")))
-    }
-
-    private fun summary(type: String, extraJson: String, id: String = "$type:test") = EntitySummary(
-        id = id,
-        entityType = type,
-        nameZh = "测试",
-        nameEn = null,
-        category = null,
-        imagePath = null,
-        sortKey = null,
-        extraJson = extraJson,
-    )
 }

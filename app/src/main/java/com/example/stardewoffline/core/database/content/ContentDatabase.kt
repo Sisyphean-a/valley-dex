@@ -20,7 +20,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.decodeFromString
 
-class ContentDatabase internal constructor(
+/** Schema-4 recovery validator adapter; never used by the schema-5 product path. */
+internal class ContentDatabase internal constructor(
     val packageRoot: File,
     private val database: SQLiteDatabase,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,

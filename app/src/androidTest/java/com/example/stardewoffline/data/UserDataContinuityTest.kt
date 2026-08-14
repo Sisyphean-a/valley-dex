@@ -3,7 +3,7 @@ package com.example.stardewoffline.data
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
-import com.example.stardewoffline.testsupport.SyntheticDataPackageFactory
+import com.example.stardewoffline.testsupport.SyntheticSchema5DataPackageFactory
 import com.example.stardewoffline.testsupport.SyntheticPackageVariant
 import com.example.stardewoffline.testsupport.TestAppScenario
 import com.example.stardewoffline.testsupport.instrumentationTestContext
@@ -30,7 +30,7 @@ class UserDataContinuityTest {
             assertEquals(setOf("object:1", "villager:Alice"), scenario.userRepository.favorites().first().map { it.entityId }.toSet())
             assertEquals(setOf("object:1", "villager:Alice"), scenario.userRepository.history().first().map { it.entityId }.toSet())
             assertEquals(listOf("萝卜"), scenario.userRepository.recentSearches().first().map { it.displayQuery })
-            assertNull(scenario.contentRepository.detail("villager:Alice").getOrNull())
+            assertNull(scenario.schema5ContentRepository.detail("villager:Alice").getOrNull())
 
             scenario.userRepository.toggleFavorite("villager:Alice", false)
             scenario.userRepository.deleteHistory("villager:Alice")
@@ -50,7 +50,7 @@ class UserDataContinuityTest {
     }
 
     private suspend fun install(scenario: TestAppScenario, variant: SyntheticPackageVariant) {
-        SyntheticDataPackageFactory(context).create(variant).use { fixture ->
+        SyntheticSchema5DataPackageFactory(context).create(variant).use { fixture ->
             assertTrue(scenario.dataPackages.installAndActivate(fixture.archive.inputStream()) is AppResult.Success)
         }
     }

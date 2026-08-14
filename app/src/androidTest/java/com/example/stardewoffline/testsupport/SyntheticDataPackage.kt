@@ -43,7 +43,9 @@ enum class SyntheticPackageFailure {
     InvalidEntityTypeCatalog,
 }
 
+/** Schema-4 recovery-only fixture; never use for ordinary installation tests. */
 class SyntheticDataPackage(private val archiveRoot: File) : AutoCloseable {
+    val root: File get() = archiveRoot
     val archive = File(archiveRoot, "package.svdata")
 
     override fun close() {
@@ -51,6 +53,7 @@ class SyntheticDataPackage(private val archiveRoot: File) : AutoCloseable {
     }
 }
 
+/** Builds schema-4 recovery assets for explicit pin/validation tests only. */
 class SyntheticDataPackageFactory(private val context: Context) {
     fun create(
         variant: SyntheticPackageVariant,
@@ -249,7 +252,7 @@ class SyntheticDataPackageFactory(private val context: Context) {
                 digest.update(buffer, 0, count)
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
     private data class FixtureEntity(

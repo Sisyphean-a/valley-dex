@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.stardewoffline.core.model.EntryImage
+import com.example.stardewoffline.core.ui.component.EntryImageStatus
 import com.example.stardewoffline.core.model.ShopKind
 import com.example.stardewoffline.core.model.ShopPresentation
 import com.example.stardewoffline.core.model.WikiEntrySummary
@@ -82,6 +83,8 @@ fun WikiEntryListItem(
                 Text(entry.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 englishTitle(entry)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 EntryMeta(entry, showCategoryLabel)
+                entry.actionSummary1?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                entry.actionSummary2?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
         }
@@ -106,6 +109,8 @@ fun WikiEntryGridItem(
             Text(entry.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             englishTitle(entry)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             EntryMeta(entry, showCategoryLabel)
+            entry.actionSummary1?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            entry.actionSummary2?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
 }
@@ -114,10 +119,12 @@ fun WikiEntryGridItem(
 private fun EntryVisual(entry: WikiEntrySummary, packageRoot: File?, modifier: Modifier) {
     val shop = entry.shop
     when {
+        entry.image is EntryImage.PackageError || entry.image is EntryImage.Proxy ->
+            EntryImageStatus(entry.image, packageRoot, entry.title, entry.categoryLabel, modifier)
         entry.image.relativePath() != null -> EntityImage(entry.image.relativePath(), packageRoot, entry.title, modifier, entry.categoryLabel)
         shop?.owner != null -> EntityImage(shop.owner.image.relativePath(), packageRoot, shop.owner.title, modifier, "村民")
         shop != null -> ShopNatureMark(shop, modifier)
-        else -> EntryTypeMark(entry.categoryLabel, modifier)
+        else -> EntryImageStatus(entry.image, packageRoot, entry.title, entry.categoryLabel, modifier)
     }
 }
 

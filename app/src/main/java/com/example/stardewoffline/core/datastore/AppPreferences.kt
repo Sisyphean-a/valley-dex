@@ -3,6 +3,8 @@ package com.example.stardewoffline.core.datastore
 data class AppPreferences(
     val activePackageId: String? = null,
     val previousPackageId: String? = null,
+    val previousCompatibleV5PackageId: String? = null,
+    val pinnedLegacyV4PackageId: String? = null,
     val lastValidatedPackageId: String? = null,
     val themeMode: String = "system",
     val dynamicColorEnabled: Boolean = false,

@@ -16,6 +16,6 @@ class HashUtils(private val ioDispatcher: CoroutineDispatcher) {
                 digest.update(buffer, 0, count)
             }
         }
-        digest.digest().joinToString("") { "%02x".format(it) }
+        digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 }

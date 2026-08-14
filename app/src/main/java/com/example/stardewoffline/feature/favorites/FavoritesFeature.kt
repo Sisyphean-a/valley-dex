@@ -37,7 +37,7 @@ import com.example.stardewoffline.core.database.user.FavoriteEntity
 import com.example.stardewoffline.core.datastore.AppPreferencesRepository
 import com.example.stardewoffline.core.model.WikiEntrySummary
 import com.example.stardewoffline.core.ui.component.WikiEntryListItem
-import com.example.stardewoffline.data.ContentRepository
+import com.example.stardewoffline.data.Schema5ContentRepository
 import com.example.stardewoffline.data.UserDataRepository
 import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,7 +57,7 @@ data class FavoriteRow(val record: FavoriteEntity, val entry: WikiEntrySummary?)
 class FavoritesViewModel @Inject constructor(
     private val user: UserDataRepository,
     private val catalogue: WikiCatalogue,
-    private val content: ContentRepository,
+    private val content: Schema5ContentRepository,
     private val preferences: AppPreferencesRepository,
 ) : ViewModel() {
     private val mutableRows = MutableStateFlow<List<FavoriteRow>>(emptyList())

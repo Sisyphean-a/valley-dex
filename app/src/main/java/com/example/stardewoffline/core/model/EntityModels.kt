@@ -2,7 +2,7 @@ package com.example.stardewoffline.core.model
 
 import kotlinx.serialization.json.JsonObject
 
-data class EntitySummary(
+internal data class EntitySummary(
     val id: String,
     val entityType: String,
     val nameZh: String,
@@ -13,7 +13,7 @@ data class EntitySummary(
     val extraJson: String = "{}",
 )
 
-data class EntityDetail(
+internal data class EntityDetail(
     val id: String,
     val entityType: String,
     val gameId: String?,

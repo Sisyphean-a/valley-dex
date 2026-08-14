@@ -28,7 +28,6 @@ import com.example.stardewoffline.core.model.WikiEntrySubmenuItem
 import com.example.stardewoffline.core.datastore.AppPreferences
 import com.example.stardewoffline.core.ui.LocalAppPreferences
 import com.example.stardewoffline.core.ui.theme.StardewOfflineTheme
-import com.example.stardewoffline.data.EntityRelationResolver
 import com.example.stardewoffline.feature.bootstrap.BootstrapRoute
 import com.example.stardewoffline.feature.bootstrap.BootstrapViewModel
 import com.example.stardewoffline.feature.detail.DetailRoute
@@ -41,8 +40,8 @@ import com.example.stardewoffline.feature.search.SearchRoute
 import com.example.stardewoffline.feature.search.SearchViewModel
 import com.example.stardewoffline.feature.type.TypeListRoute
 import com.example.stardewoffline.feature.type.TypeListViewModel
-import com.example.stardewoffline.data.wiki.DefaultWikiCatalogue
-import com.example.stardewoffline.testsupport.SyntheticDataPackageFactory
+import com.example.stardewoffline.data.wiki.Schema5WikiCatalogue
+import com.example.stardewoffline.testsupport.SyntheticSchema5DataPackageFactory
 import com.example.stardewoffline.testsupport.SyntheticPackageVariant
 import com.example.stardewoffline.testsupport.TestAppScenario
 import com.example.stardewoffline.testsupport.TestHostActivity
@@ -82,7 +81,7 @@ class RouteNavigationTest {
             var selected: String? = null
             val viewModel = provide(scenario) {
                 HomeViewModel(
-                    DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
+                    Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository),
                     scenario.preferences,
                 )
             }
@@ -104,8 +103,8 @@ class RouteNavigationTest {
             val viewModel = provide(scenario) {
                 TypeListViewModel(
                     saved = SavedStateHandle(mapOf("categoryId" to "type:villager")),
-                    catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
-                    content = scenario.contentRepository,
+                    catalogue = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository),
+                    content = scenario.schema5ContentRepository,
                     preferences = scenario.preferences,
                 )
             }
@@ -169,8 +168,8 @@ class RouteNavigationTest {
             val viewModel = provide(scenario) {
                 TypeListViewModel(
                     saved = SavedStateHandle(mapOf("categoryId" to "type:crop")),
-                    catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
-                    content = scenario.contentRepository,
+                    catalogue = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository),
+                    content = scenario.schema5ContentRepository,
                     preferences = scenario.preferences,
                 )
             }
@@ -193,8 +192,8 @@ class RouteNavigationTest {
             val viewModel = provide(scenario) {
                 TypeListViewModel(
                     saved = SavedStateHandle(mapOf("categoryId" to "type:fish")),
-                    catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
-                    content = scenario.contentRepository,
+                    catalogue = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository),
+                    content = scenario.schema5ContentRepository,
                     preferences = scenario.preferences,
                 )
             }
@@ -215,8 +214,8 @@ class RouteNavigationTest {
             val listViewModel = provide(scenario) {
                 TypeListViewModel(
                     saved = SavedStateHandle(mapOf("categoryId" to "type:crop")),
-                    catalogue = DefaultWikiCatalogue(scenario.dataPackages, scenario.contentRepository, EntityRelationResolver(scenario.contentRepository), scenario.searchRepository),
-                    content = scenario.contentRepository,
+                    catalogue = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository),
+                    content = scenario.schema5ContentRepository,
                     preferences = scenario.preferences,
                 )
             }
@@ -237,13 +236,8 @@ class RouteNavigationTest {
             var searchDetail: String? = null
             val searchViewModel = provide(scenario) {
                 SearchViewModel(
-                    catalogue = DefaultWikiCatalogue(
-                        scenario.dataPackages,
-                        scenario.contentRepository,
-                        EntityRelationResolver(scenario.contentRepository),
-                        scenario.searchRepository,
-                    ),
-                    content = scenario.contentRepository,
+                    catalogue = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository),
+                    content = scenario.schema5ContentRepository,
                     user = scenario.userRepository,
                     preferences = scenario.preferences,
                 )
@@ -267,13 +261,8 @@ class RouteNavigationTest {
             val viewModel = provide(scenario) {
                 DetailViewModel(
                     savedStateHandle = SavedStateHandle(mapOf("id" to "object:1")),
-                    catalogue = DefaultWikiCatalogue(
-                        scenario.dataPackages,
-                        scenario.contentRepository,
-                        EntityRelationResolver(scenario.contentRepository),
-                        scenario.searchRepository,
-                    ),
-                    content = scenario.contentRepository,
+                    catalogue = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository),
+                    content = scenario.schema5ContentRepository,
                     user = scenario.userRepository,
                 )
             }
@@ -287,7 +276,7 @@ class RouteNavigationTest {
 
     private suspend fun readyScenario(): TestAppScenario {
         val scenario = TestAppScenario.create(context)
-        SyntheticDataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
+        SyntheticSchema5DataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
             check(scenario.dataPackages.installAndActivate(fixture.archive.inputStream()) is AppResult.Success)
         }
         return scenario

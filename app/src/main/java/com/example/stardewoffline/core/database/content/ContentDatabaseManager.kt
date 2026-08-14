@@ -4,11 +4,12 @@ import android.content.Context
 import com.example.stardewoffline.core.common.AppError
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.IoDispatcher
-import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.datastore.AppPreferencesRepository
+import com.example.stardewoffline.core.model.DataManifest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
+import kotlinx.serialization.json.Json
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
@@ -20,45 +21,64 @@ class ContentDatabaseManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val preferences: AppPreferencesRepository,
     private val factory: ContentDatabaseFactory,
+    private val json: Json,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) {
     private val mutex = Mutex()
-    private var opened: OpenedDatabase? = null
+    private var openedSchema5: OpenedSchema5? = null
 
-    suspend fun openActive(): AppResult<ContentDatabase> = withContext(ioDispatcher) {
-        mutex.withLock { openActiveLocked() }
+    internal suspend fun openActiveSchema5(): AppResult<Schema5ContentDatabase> = withContext(ioDispatcher) {
+        mutex.withLock { openSchema5Locked() }
     }
 
-    /**
-     * Flow: keeps the current database handle locked through the complete query action.
-     * Guarantee: a package switch cannot close the handle while a repository query is using it.
-     */
-    suspend fun <T> useActive(action: suspend (ContentDatabase) -> AppResult<T>): AppResult<T> = withContext(ioDispatcher) {
+    suspend fun <T> useActiveSchema5(action: suspend (Schema5ContentDatabase) -> AppResult<T>): AppResult<T> = withContext(ioDispatcher) {
         mutex.withLock {
-            val opened = openActiveLocked()
-            val database = opened.getOrNull()
-                ?: return@withLock AppResult.Failure((opened as? AppResult.Failure)?.error ?: AppError.NoDataPackage)
-            action(database)
+            when (val opened = openSchema5Locked()) {
+                is AppResult.Success -> action(opened.value)
+                is AppResult.Failure -> AppResult.Failure(opened.error)
+            }
+        }
+    }
+
+    suspend fun activePackageRoot(): File? = withContext(ioDispatcher) {
+        mutex.withLock {
+            openedSchema5?.database?.packageRoot
         }
     }
 
     suspend fun close() = withContext(ioDispatcher) { mutex.withLock { closeLocked() } }
 
-    private suspend fun openActiveLocked(): AppResult<ContentDatabase> {
+    private suspend fun openSchema5Locked(): AppResult<Schema5ContentDatabase> {
         val packageId = preferences.current().activePackageId
             ?: return AppResult.Failure(AppError.NoDataPackage)
-        opened?.takeIf { it.id == packageId }?.let { return AppResult.Success(it.database) }
+        openedSchema5?.takeIf { it.id == packageId }?.let { return AppResult.Success(it.database) }
         closeLocked()
         val root = File(context.filesDir, "content/packages/$packageId")
-        val result = factory.open(root, File(root, "stardew.db"))
-        if (result is AppResult.Success) opened = OpenedDatabase(packageId, result.value)
+        val manifestFile = File(root, "manifest.json")
+        if (!manifestFile.isFile) return AppResult.Failure(AppError.InvalidManifest("当前数据包缺少 manifest.json"))
+        val manifest = runCatching {
+            json.decodeFromString<DataManifest>(manifestFile.readText())
+        }.getOrElse { return AppResult.Failure(AppError.InvalidManifest("当前数据包 manifest.json 无效")) }
+        if (manifest.schemaVersion != 5) {
+            return AppResult.Failure(AppError.UnsupportedSchema(manifest.schemaVersion))
+        }
+        if (!manifest.publishable) {
+            return AppResult.Failure(AppError.NotPublishable)
+        }
+        val databaseName = manifest.database.file
+        val databaseFile = File(root, databaseName).canonicalFile
+        if (!databaseFile.path.startsWith(root.canonicalPath + File.separator)) {
+            return AppResult.Failure(AppError.InvalidManifest("数据库路径越界"))
+        }
+        val result = factory.openSchema5(root, databaseFile)
+        if (result is AppResult.Success) openedSchema5 = OpenedSchema5(packageId, result.value)
         return result
     }
 
     private fun closeLocked() {
-        opened?.database?.close()
-        opened = null
+        openedSchema5?.database?.close()
+        openedSchema5 = null
     }
 
-    private data class OpenedDatabase(val id: String, val database: ContentDatabase)
+    private data class OpenedSchema5(val id: String, val database: Schema5ContentDatabase)
 }

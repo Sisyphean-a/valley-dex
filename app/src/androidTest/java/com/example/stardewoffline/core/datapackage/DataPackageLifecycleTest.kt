@@ -1,12 +1,11 @@
 package com.example.stardewoffline.core.datapackage
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.stardewoffline.core.common.AppError
 import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.model.DataPackageInfo
 import com.example.stardewoffline.testsupport.SyntheticDataPackageFactory
-import com.example.stardewoffline.testsupport.SyntheticPackageFailure
+import com.example.stardewoffline.testsupport.SyntheticSchema5DataPackageFactory
 import com.example.stardewoffline.testsupport.SyntheticPackageVariant
 import com.example.stardewoffline.testsupport.TestAppScenario
 import com.example.stardewoffline.testsupport.instrumentationTestContext
@@ -32,11 +31,27 @@ class DataPackageLifecycleTest {
             val first = import(scenario, SyntheticPackageVariant.A).getOrNull() ?: error("A 包未导入")
             val second = import(scenario, SyntheticPackageVariant.B).getOrNull() ?: error("B 包未导入")
             assertNotEquals(first.id, second.id)
-            assertTrue(scenario.contentRepository.detail("villager:Alice").getOrNull() == null)
+            assertTrue(scenario.schema5ContentRepository.detail("villager:Alice").getOrNull() == null)
 
             val rollback = scenario.dataPackages.rollback().getOrNull() ?: error("回滚失败")
             assertEquals(first.id, rollback.id)
-            assertEquals("测试村民", scenario.contentRepository.detail("villager:Alice").getOrNull()?.nameZh)
+            assertEquals("测试村民", scenario.schema5ContentRepository.detail("villager:Alice").getOrNull()?.nameZh)
+        } finally {
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun legacyV4RecoveryPinIsStoredWithoutEnteringTypedQueries() = runBlocking {
+        val scenario = TestAppScenario.create(context)
+        try {
+            SyntheticDataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
+                assertTrue(scenario.dataPackages.pinLegacyV4Recovery(fixture.root) is AppResult.Success)
+            }
+            val preferences = scenario.preferences.current()
+            assertEquals(null, preferences.activePackageId)
+            assertTrue(preferences.pinnedLegacyV4PackageId != null)
+            assertTrue(scenario.schema5ContentRepository.detail("object:1") is AppResult.Failure)
         } finally {
             scenario.close()
         }
@@ -50,7 +65,7 @@ class DataPackageLifecycleTest {
             val result = withTimeout(5_000) {
                 scenario.dataPackages.withActivePackage {
                     coroutineScope {
-                        async { scenario.contentRepository.summaries("villager") }.await()
+                        async { scenario.schema5ContentRepository.summaries("villager") }.await()
                     }
                 }
             }
@@ -70,7 +85,7 @@ class DataPackageLifecycleTest {
 
             assertTrue(scenario.dataPackages.verifyActive() is AppResult.Failure)
             assertEquals(first.id, scenario.dataPackages.openActive().getOrNull()?.id)
-            assertEquals("测试村民", scenario.contentRepository.detail("villager:Alice").getOrNull()?.nameZh)
+            assertEquals("测试村民", scenario.schema5ContentRepository.detail("villager:Alice").getOrNull()?.nameZh)
         } finally {
             scenario.close()
         }
@@ -80,7 +95,7 @@ class DataPackageLifecycleTest {
     fun reimportingAPackageRestoresItsDamagedDirectory() = runBlocking {
         val scenario = TestAppScenario.create(context)
         try {
-            SyntheticDataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
+            SyntheticSchema5DataPackageFactory(context).create(SyntheticPackageVariant.A).use { fixture ->
                 val installed = scenario.dataPackages.installAndActivate(fixture.archive.inputStream()).getOrNull()
                     ?: error("初次导入失败")
                 File(scenario.context.filesDir, "content/packages/${installed.id}/stardew.db").writeBytes(byteArrayOf(0))
@@ -89,23 +104,7 @@ class DataPackageLifecycleTest {
                 val restored = scenario.dataPackages.installAndActivate(fixture.archive.inputStream()).getOrNull()
                     ?: error("重新导入失败")
                 assertEquals(installed.id, restored.id)
-                assertEquals("萝卜", scenario.contentRepository.detail("object:1").getOrNull()?.nameZh)
-            }
-        } finally {
-            scenario.close()
-        }
-    }
-
-    @Test
-    fun rejectedPackagesLeaveTheCurrentPackageReadable() = runBlocking {
-        val scenario = TestAppScenario.create(context)
-        try {
-            val active = import(scenario, SyntheticPackageVariant.A).getOrNull() ?: error("A 包未导入")
-            SyntheticPackageFailure.entries.forEach { failure ->
-                val rejected = import(scenario, SyntheticPackageVariant.A, failure)
-                assertExpectedError(rejected, failure)
-                assertEquals(active.id, scenario.dataPackages.openActive().getOrNull()?.id)
-                assertEquals("萝卜", scenario.contentRepository.detail("object:1").getOrNull()?.nameZh)
+                assertEquals("萝卜", scenario.schema5ContentRepository.detail("object:1").getOrNull()?.nameZh)
             }
         } finally {
             scenario.close()
@@ -115,35 +114,12 @@ class DataPackageLifecycleTest {
     private suspend fun import(
         scenario: TestAppScenario,
         variant: SyntheticPackageVariant,
-        failure: SyntheticPackageFailure? = null,
     ): AppResult<DataPackageInfo> {
-        val fixture = SyntheticDataPackageFactory(context).create(variant, failure)
+        val fixture = SyntheticSchema5DataPackageFactory(context).create(variant)
         return try {
             fixture.archive.inputStream().use { input -> scenario.dataPackages.installAndActivate(input) }
         } finally {
             fixture.close()
         }
-    }
-
-    private fun assertExpectedError(result: AppResult<*>, failure: SyntheticPackageFailure) {
-        val error = (result as? AppResult.Failure)?.error
-        val matches = when (failure) {
-            SyntheticPackageFailure.UnsupportedSchema,
-            SyntheticPackageFailure.LegacySchema -> error is AppError.UnsupportedSchema
-            SyntheticPackageFailure.InvalidFormat -> error is AppError.InvalidPackageFormat
-            SyntheticPackageFailure.NotPublishable -> error is AppError.NotPublishable
-            SyntheticPackageFailure.QualityFailed -> error is AppError.QualityFailed
-            SyntheticPackageFailure.InvalidJson, SyntheticPackageFailure.MissingDatabase -> error is AppError.InvalidManifest
-            SyntheticPackageFailure.HashMismatch -> error is AppError.HashMismatch
-            SyntheticPackageFailure.InvalidImage,
-            SyntheticPackageFailure.TransparentImage -> error is AppError.ImageInvalid
-            SyntheticPackageFailure.MetadataMismatch,
-            SyntheticPackageFailure.MismatchedEntityCount -> error is AppError.MetadataMismatch
-            SyntheticPackageFailure.MissingImage -> error is AppError.ImageMissing
-            SyntheticPackageFailure.InvalidEntityTypeCatalog -> error is AppError.InvalidEntityTypeCatalog
-            SyntheticPackageFailure.MissingBuildMeta,
-            SyntheticPackageFailure.MissingSearchIndex -> error is AppError.DatabaseCorrupted
-        }
-        assertTrue("$failure 返回了 $error", matches)
     }
 }

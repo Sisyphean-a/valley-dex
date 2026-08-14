@@ -14,12 +14,32 @@ import kotlinx.coroutines.withContext
 class ContentDatabaseFactory @Inject constructor(
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) {
-    suspend fun open(packageRoot: File, databaseFile: File): AppResult<ContentDatabase> = withContext(ioDispatcher) {
+    internal suspend fun open(packageRoot: File, databaseFile: File): AppResult<ContentDatabase> = withContext(ioDispatcher) {
         openDatabase(packageRoot, databaseFile, SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS, queryOnly = true)
     }
 
-    suspend fun openForValidation(packageRoot: File, databaseFile: File): AppResult<ContentDatabase> = withContext(ioDispatcher) {
+    suspend fun openSchema5(packageRoot: File, databaseFile: File): AppResult<Schema5ContentDatabase> = withContext(ioDispatcher) {
+        openSchema5Database(packageRoot, databaseFile)
+    }
+
+    internal suspend fun openForValidation(packageRoot: File, databaseFile: File): AppResult<ContentDatabase> = withContext(ioDispatcher) {
         openDatabase(packageRoot, databaseFile, SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.NO_LOCALIZED_COLLATORS, queryOnly = false)
+    }
+
+    private fun openSchema5Database(packageRoot: File, databaseFile: File): AppResult<Schema5ContentDatabase> {
+        if (!databaseFile.isFile) return AppResult.Failure(AppError.DatabaseOpenFailed("数据库文件不存在"))
+        return runCatching {
+            val database = SQLiteDatabase.openDatabase(
+                databaseFile.absolutePath,
+                null,
+                SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS,
+            )
+            database.execSQL("PRAGMA query_only = ON")
+            Schema5ContentDatabase(packageRoot, database, ioDispatcher)
+        }.fold(
+            onSuccess = { AppResult.Success(it) },
+            onFailure = { AppResult.Failure(AppError.DatabaseOpenFailed(it.message ?: "schema 5 打开失败")) },
+        )
     }
 
     private fun openDatabase(
