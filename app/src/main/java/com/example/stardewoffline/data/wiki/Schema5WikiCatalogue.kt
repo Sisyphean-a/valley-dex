@@ -358,6 +358,8 @@ class Schema5WikiCatalogue @Inject constructor(
         "purchase_price" -> "购买价格"
         "seed_purchase_price" -> "种子购买价格"
         "purchase_currency", "seed_purchase_currency" -> "交易货币"
+        "purchase_currency_amount", "seed_purchase_currency_amount" -> "非金币报价"
+        "purchase_price_rule", "seed_purchase_price_rule" -> "动态报价规则"
         "purchase_exchange_item_id", "seed_purchase_exchange_item_id" -> "兑换成本物品"
         "purchase_exchange_amount", "seed_purchase_exchange_amount" -> "兑换数量"
         "seasons" -> "季节"
