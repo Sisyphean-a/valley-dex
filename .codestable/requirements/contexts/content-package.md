@@ -35,7 +35,7 @@ code-paths:
 - 已激活包的手动验证失败会关闭当前内容库、清除内存元数据；仅当上一包再次完整校验并成功打开时才退回它，否则清空活动包。验证失败的包不得继续由页面缓存或重开句柄读取。
 - `DataPackageManager` 的生命周期锁包住仓储查询与目录替换；`ContentDatabaseManager` 在其内部独占当前 SQLite 句柄，并在 IO dispatcher 与互斥锁内打开/关闭。查询方不能自行持有跨切包的句柄。
 - 包根目录中的图片路径必须解析后仍位于包根目录；非空图片缺失是导入失败，不以占位图掩盖损坏包。没有图片路径的实体由图鉴边界提供占位图。
-- 真实发布级数据包不进入仓库。首个 v5 发布前冻结工作区外真实 v4 包并生成迁移差异报告；真实 v5 验收只接受由真实官方资产构建的显式外部文件。fixture、代码生成的模拟官方目录、旧 schema 包和质量失败包只能证明边界或拒绝路径，不能作为发布成功证据。
+- 真实发布级数据包不进入仓库。首个 v5 发布前冻结工作区外真实 v4 包并生成迁移差异报告；真实 v5 验收只接受由真实官方资产构建的显式外部文件。`RealV5PackageAcceptanceTest` 仅在显式 instrumentation 参数 `realV5Required=true` 与 `realV5PackagePath=<外部包>` 同时提供时运行，必须实际安装该包并读取每个发布分类及其首条详情。fixture、代码生成的模拟官方目录、旧 schema 包和质量失败包只能证明边界或拒绝路径，不能作为发布成功证据。
 - 自动验收覆盖 API 26/30/36、320/360/411dp 手机和至少 600dp 平板、fontScale 1.0/1.3/2.0、浅色/深色及真实 v5 安装/查询/切换/回滚。候选发布另在最低能力手机、当前 API 手机和大屏设备执行，至少一台开启 TalkBack；临时使用仿真设备须在证明中标明。真实包导入/全验证 p95≤30s，活动包冷启动到可交互 p95≤2s。
 
 ## 代码锚点
@@ -44,6 +44,7 @@ code-paths:
 - `core/datapackage/DataPackageValidator.kt`：manifest、数据库元数据、统计和图片校验。
 - `core/datapackage/SafeZipExtractor.kt`：归档路径与体积边界。
 - `core/datapackage/DataPackageInstaller.kt`、`DataPackageManager.kt`：暂存提交、活动包切换、验证失败停用、回滚和清理。
+- `app/src/androidTest/java/com/example/stardewoffline/core/datapackage/RealV5PackageAcceptanceTest.kt`：外部真实 v5 包的安装与全分类/详情读取验收入口。
 - `core/database/content/ContentDatabaseFactory.kt`、`ContentDatabaseManager.kt`：只读数据库和句柄生命周期。
 - `data/ContentRepository.kt`、`SearchRepository.kt`：在活动包生命周期租约内读取内容。
 - `core/datastore/AppPreferencesRepository.kt`：活动包、上一包和最近验证标识。
