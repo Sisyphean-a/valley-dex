@@ -263,7 +263,7 @@ private fun CatalogueContent(
             Column(Modifier.weight(1f).fillMaxWidth()) {
                 LazyVerticalGrid(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    columns = GridCells.Fixed(4),
+                    columns = GridCells.Adaptive(minSize = 140.dp),
                     contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
