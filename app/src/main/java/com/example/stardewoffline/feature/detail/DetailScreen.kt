@@ -201,17 +201,14 @@ private fun EntrySubmenuCard(submenu: WikiEntrySubmenu, onDetail: (String) -> Un
 
 @Composable
 private fun ScheduleItemRow(item: WikiEntrySubmenuItem) {
-    val times = item.details.filter { it.label == "时间" }.map(EntryFact::value)
-    val locations = item.details.filter { it.label == "地点" }.map(EntryFact::value)
-    val stops = times.zip(locations)
     Surface(modifier = Modifier.fillMaxWidth().testTag("detail-schedule-row:${item.label}"), shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(item.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            stops.forEachIndexed { index, (time, location) ->
+            item.details.forEachIndexed { index, fact ->
                 if (index > 0) Text("↓", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = DetailGold)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(time, modifier = Modifier.weight(0.38f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                    Text(location, modifier = Modifier.weight(0.62f), style = MaterialTheme.typography.bodySmall)
+                    Text(fact.label, modifier = Modifier.weight(0.25f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    Text(fact.value, modifier = Modifier.weight(0.75f), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

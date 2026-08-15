@@ -148,21 +148,26 @@ class Schema5WikiCatalogue @Inject constructor(
     private suspend fun toEntry(detail: Schema5EntityDetail, typeLabel: String): WikiEntry {
         val outgoing = detail.relationGroups.flatMap { group -> group.relations }
         val incoming = content.reverseRelations(detail.summary.id).getOrNull().orEmpty()
-        val supportTargetIds = detail.facts
-            .filter { it.slotKey == "gift_preferences" }
-            .flatMap { fact -> fact.items.mapNotNull { it.value.text } }
-            .filter { it.contains(":") && !it.startsWith("类别引用：") && !it.startsWith("未解析") }
+        val referenceValues = detail.facts.flatMap { fact ->
+            listOfNotNull(fact.value?.text) + fact.items.mapNotNull { it.value.text }
+        }.filter { it.contains(":") && !it.startsWith("类别引用：") && !it.startsWith("未解析") }
         val targetIds = (
             outgoing.map(Schema5Relation::objectEntityId) +
                 incoming.map(Schema5Relation::subjectEntityId) +
-                supportTargetIds
+                referenceValues
             ).distinct()
         val targets = content.summaries(targetIds).getOrNull().orEmpty()
+        // 决策 05：本人不可婚配时（如文森特/贾斯、已婚村民），官方 LoveInterest
+        // 配对指针没有玩家价值，不进入普通页面；builder 仍保留该边供诊断。
+        val subjectRomanceable = detail.facts
+            .firstOrNull { it.slotKey == "can_be_romanced" }
+            ?.value?.boolean == true
         val relations = detail.relationGroups.flatMap { group ->
+            val familyLabel = relationFamilyLabel(group.family)
             val state = relationState(group.status)
             val statusRelation = state?.let {
                 EntryRelation(
-                    group.family,
+                    familyLabel,
                     "关系状态",
                     emptyList(),
                     RelationTarget.ReadableText(
@@ -171,7 +176,8 @@ class Schema5WikiCatalogue @Inject constructor(
                 )
             }
             listOfNotNull(statusRelation) + group.relations.filter {
-                it.subjectEntityId == detail.summary.id
+                it.subjectEntityId == detail.summary.id &&
+                    !(it.predicate == "love_interest_pointer" && !subjectRomanceable)
             }.map { relation ->
                 val target = targets[relation.objectEntityId]?.let { summary ->
                     RelationTarget.Entry(
@@ -181,7 +187,7 @@ class Schema5WikiCatalogue @Inject constructor(
                     )
                 } ?: RelationTarget.Unavailable("关联内容暂未收录")
                 EntryRelation(
-                    section = group.family,
+                    section = familyLabel,
                     label = relation.label ?: relationLabel(relation.predicate),
                     details = listOfNotNull(
                         conditionFact(relation.condition),
@@ -192,7 +198,9 @@ class Schema5WikiCatalogue @Inject constructor(
                     target = target,
                 )
             }
-        } + incoming.map { relation ->
+        } + incoming.filter {
+            !(it.predicate == "love_interest_pointer" && !subjectRomanceable)
+        }.map { relation ->
             val target = targets[relation.subjectEntityId]?.let { summary ->
                 RelationTarget.Entry(
                     id = summary.id,
@@ -201,11 +209,14 @@ class Schema5WikiCatalogue @Inject constructor(
                 )
             } ?: RelationTarget.Unavailable("关联内容暂未收录")
             EntryRelation(
-                section = relation.family?.let { "反向关系·$it" } ?: "反向关系",
+                section = relation.family?.let { "反向关系·${relationFamilyLabel(it)}" } ?: "反向关系",
                 label = relation.label ?: relationLabel(relation.predicate),
                 details = listOfNotNull(
                     conditionFact(relation.condition),
-                    EntryFact("方向", "${relation.subjectEntityId} → ${detail.summary.id}"),
+                    EntryFact(
+                        "方向",
+                        "${targets[relation.subjectEntityId]?.nameZh ?: relation.subjectEntityId} → ${detail.summary.nameZh}",
+                    ),
                 ),
                 target = target,
             )
@@ -217,7 +228,7 @@ class Schema5WikiCatalogue @Inject constructor(
             categoryLabel = typeLabel,
             image = imageFor(detail.summary.visual),
             summary = detail.summary.card.identitySummary ?: detail.summary.descriptionZh ?: detail.summary.descriptionEn,
-            sections = typedSections(detail, incoming),
+            sections = typedSections(detail, incoming, targets),
             relations = relations,
             submenus = supportSubmenus(detail, targets),
         )
@@ -225,39 +236,658 @@ class Schema5WikiCatalogue @Inject constructor(
 
     private fun typedSections(
         detail: Schema5EntityDetail,
-        incomingRelations: List<Schema5Relation> = emptyList(),
+        incomingRelations: List<Schema5Relation>,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        if (detail.summary.entityType == "villager") return villagerSections(detail, targets)
+        if (detail.summary.entityType == "crop") return cropSections(detail, targets)
+        if (detail.summary.entityType == "fish") return fishSections(detail, targets)
+        if (detail.summary.entityType == "monster") return monsterSections(detail, targets)
+        if (detail.summary.entityType == "weapon") return weaponSections(detail, targets)
+        if (detail.summary.entityType == "shop") return shopSections(detail, targets)
+        if (detail.summary.entityType == "tool") return toolSections(detail, targets)
+        if (detail.summary.entityType == "big_craftable") return bigCraftableSections(detail, targets)
+        if (detail.summary.entityType == "object" || detail.summary.entityType == "mineral") {
+            return itemSections(detail, targets)
+        }
+        if (detail.summary.entityType == "ring") return ringSections(detail, targets)
+        if (detail.summary.entityType == "furniture") return furnitureSections(detail, targets)
+        if (detail.summary.entityType == "footwear") return footwearSections(detail, targets)
+        if (detail.summary.entityType == "cooking_recipe") return cookingSections(detail, targets)
+        return genericSections(detail, incomingRelations, targets)
+    }
+
+    /**
+     * 工具四层详情：立即行动按工具契约排序（用途与档位 → 升级条件/地点/耗时 →
+     * 升级效果由官方描述承载），升级链进入可展开资料。
+     */
+    private fun toolSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["tool_kind"]?.value?.text?.let { immediate += EntryFact("类型", it) }
+        factsBySlot["tool_level"]?.value?.text?.let { immediate += EntryFact("档位", it) }
+        factsBySlot["upgrade_from_id"]?.let { fact ->
+            fact.value?.text?.let { reference ->
+                val previous = targets[reference]?.nameZh ?: reference
+                immediate += EntryFact("前一级", previous)
+            }
+        }
+        factsBySlot["upgrade_material_id"]?.let { fact ->
+            fact.value?.text?.let { reference ->
+                val material = targets[reference]?.nameZh ?: reference
+                immediate += EntryFact("升级材料", "$material ×5")
+            }
+        }
+        factsBySlot["upgrade_price"]?.value?.integer?.let { immediate += EntryFact("升级价格", "$it 金币") }
+        factsBySlot["upgrade_location"]?.value?.text?.let { immediate += EntryFact("升级地点", it) }
+        factsBySlot["upgrade_time"]?.value?.text?.let { immediate += EntryFact("升级耗时", it) }
+        factsBySlot["sell_price"]?.value?.integer?.let { immediate += EntryFact("出售价格", "$it 金币") }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 大型可制作物四层详情：立即行动（主要产物/用途 → 解锁 → 制作材料 →
+     * 购买/升级价），材料全集进入可展开资料。
+     */
+    private fun bigCraftableSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["primary_output"]?.items?.firstOrNull()?.value?.text?.let {
+            immediate += EntryFact("主要产物", it)
+        }
+        factsBySlot["unlock"]?.items?.firstOrNull()?.value?.text?.let {
+            immediate += EntryFact("解锁", it)
+        }
+        factsBySlot["purchase_price"]?.value?.integer?.let {
+            immediate += EntryFact("购买价格", "$it 金币")
+        }
+        factsBySlot["upgrade_price"]?.value?.integer?.let {
+            immediate += EntryFact("升级价格", "$it 金币")
+        }
+        val materials = factsBySlot["crafting_material_id"]?.items.orEmpty()
+        if (materials.isNotEmpty()) {
+            immediate += EntryFact("制作材料", "共 ${materials.size} 种（详见下方材料清单）")
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 商店四层详情：立即行动按商店契约排序（地点 → 营业规则 → 店主 →
+     * 前几件商品报价），完整商品表进入可展开资料。
+     */
+    private fun shopSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["location"]?.items?.firstOrNull()?.value?.text?.let {
+            immediate += EntryFact("地点", it)
+        }
+        factsBySlot["opening_hours"]?.let { fact ->
+            fact.items.firstOrNull()?.value?.text?.let { hours ->
+                val note = fact.condition?.playerSummary
+                immediate += EntryFact("营业时间", if (note.isNullOrBlank()) hours else "$hours（$note）")
+            }
+        }
+        factsBySlot["owner"]?.items?.firstOrNull()?.value?.text?.let {
+            immediate += EntryFact("店主", it)
+        }
+        val offers = shopOfferRows(detail, targets)
+        offers.take(3).forEach { (label, _) -> immediate += EntryFact("商品", label) }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /** 商品报价行：名称 + 价格/兑换/规则 + 条件；scope 配对由 builder 保证。 */
+    private fun shopOfferRows(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<Pair<String, RelationTarget?>> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val items = factsBySlot["shop_offer_item"]?.items.orEmpty()
+        if (items.isEmpty()) return emptyList()
+        fun paired(slotKey: String) = factsBySlot[slotKey]?.items.orEmpty().associateBy { it.scopeId }
+        val prices = paired("shop_offer_price")
+        val currencies = paired("shop_offer_currency")
+        val currencyAmounts = paired("shop_offer_currency_amount")
+        val exchangeItems = paired("shop_offer_exchange_item_id")
+        val exchangeAmounts = paired("shop_offer_exchange_amount")
+        val rules = paired("shop_offer_price_rule")
+        return items.map { item ->
+            val reference = item.value.text.orEmpty()
+            val target = targets[reference]?.let { summary ->
+                RelationTarget.Entry(summary.id, summary.nameZh, imageFor(summary.visual))
+            }
+            val name = target?.title ?: reference
+            val scope = item.scopeId
+            val suffix = when {
+                prices[scope]?.value?.integer != null -> "${prices[scope]?.value?.integer} 金币"
+                currencies[scope]?.value?.text != null ->
+                    listOfNotNull(
+                        currencyAmounts[scope]?.value?.integer,
+                        currencies[scope]?.value?.text,
+                    ).joinToString(" ")
+                exchangeItems[scope]?.value?.text != null -> {
+                    val exchangeRef = exchangeItems[scope]?.value?.text.orEmpty()
+                    val exchangeName = targets[exchangeRef]?.nameZh ?: exchangeRef
+                    "以 ${exchangeAmounts[scope]?.value?.integer ?: 1} × $exchangeName 兑换"
+                }
+                rules[scope]?.value?.text != null -> rules[scope]?.value?.text.orEmpty()
+                else -> ""
+            }
+            val conditionNote = conditionFact(item.condition)?.value
+            val label = listOfNotNull(
+                name,
+                suffix.takeIf(String::isNotEmpty),
+                conditionNote?.let { "（$it）" },
+            ).joinToString(" ")
+            label to target
+        }
+    }
+
+    /**
+     * 作物四层详情：立即行动按作物契约排序（季节与成熟 → 种子来源和成本 →
+     * 收获/再生/关键要求 → 出售价格），用途进入可展开资料。
+     */
+    private fun cropSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["seasons"]?.let { fact ->
+            fact.value?.text?.takeIf(String::isNotBlank)?.let { immediate += EntryFact("季节", it) }
+        }
+        factsBySlot["first_harvest_days"]?.let { fact ->
+            val days = fact.value?.integer
+            if (days != null) {
+                val regrow = factsBySlot["regrow_days"]?.value?.integer
+                val growth = if (regrow != null && regrow > 0) {
+                    "首次收获 $days 天，之后每 $regrow 天可再收"
+                } else {
+                    "首次收获 $days 天"
+                }
+                immediate += EntryFact("成熟", growth)
+            }
+        }
+        factsBySlot["seed_item_id"]?.let { fact ->
+            val seedName = fact.value?.text?.let { targets[it]?.nameZh ?: it } ?: "未知"
+            val priceText = when {
+                factsBySlot["seed_purchase_price"] == null -> ""
+                factsBySlot["seed_purchase_price"]?.status == Schema5FactStatus.DYNAMIC_RULE -> "，价格见商店报价（受游戏规则影响）"
+                factsBySlot["seed_purchase_price"]?.status == Schema5FactStatus.NOT_COLLECTED -> "，购买价暂未收录"
+                factsBySlot["seed_purchase_price"]?.status == Schema5FactStatus.NOT_APPLICABLE -> ""
+                else -> factsBySlot["seed_purchase_price"]?.value?.integer?.let { "，${it} 金币" } ?: ""
+            }
+            immediate += EntryFact("种子", seedName + priceText)
+        }
+        factsBySlot["harvest_item_id"]?.let { fact ->
+            val harvest = fact.value?.text?.let { targets[it]?.nameZh ?: it }
+            if (!harvest.isNullOrBlank()) immediate += EntryFact("收获物", harvest)
+        }
+        factsBySlot["needs_watering"]?.let { fact ->
+            if (fact.value?.boolean == false) immediate += EntryFact("关键要求", "不需要每天浇水")
+        }
+        factsBySlot["sell_price"]?.let { fact ->
+            fact.value?.integer?.let { immediate += EntryFact("出售价格", "$it 金币") }
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 人物四层详情：立即行动按人物契约排序（常住地/日程规则 → 生日/最爱礼物 →
+     * 婚配资格），完整日程与五档礼物进入可展开资料，来源只保留玩家文案。
+     */
+    private fun villagerSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["residence_region"]?.let { fact ->
+            immediate += EntryFact("常住地", fact.value?.display()?.takeIf(String::isNotBlank) ?: "未知")
+        }
+        factsBySlot["schedule"]?.let { fact ->
+            if (fact.items.isNotEmpty()) {
+                immediate += EntryFact("日程", "按星期、季节与天气变化（已收录 ${fact.items.size} 条）")
+            }
+        }
+        factsBySlot["birthday"]?.let { fact ->
+            immediate += EntryFact("生日", fact.value?.display()?.takeIf(String::isNotBlank) ?: "未知")
+        }
+        factsBySlot["gift_preferences"]?.let { fact ->
+            val loved = fact.items
+                .filter { "loved" in (it.scopeId.orEmpty()) }
+                .mapNotNull { item -> item.value.text }
+                .map { reference -> targets[reference]?.nameZh ?: reference }
+            if (loved.isNotEmpty()) immediate += EntryFact("最爱礼物", loved.joinToString("、"))
+        }
+        factsBySlot["can_be_romanced"]?.let { fact ->
+            val text = when (fact.value?.boolean) {
+                true -> "可以结婚"
+                false -> "不可结婚"
+                null -> "未知"
+            }
+            immediate += EntryFact("婚配资格", text)
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val extra = mutableListOf<EntryFact>()
+        factsBySlot["gender"]?.let { fact ->
+            fact.value?.text?.takeIf(String::isNotBlank)?.let { extra += EntryFact("性别", it) }
+        }
+        if (extra.isNotEmpty()) sections += EntrySection("更多资料", extra)
+        detail.aliases.takeIf { it.isNotEmpty() }?.let {
+            sections += EntrySection("别名", listOf(EntryFact("别名", it.joinToString("、"))))
+        }
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 鱼类四层详情：立即行动回答在哪里/何时能钓到（地点 → 季节/时间/天气 → 难度），
+     * 行为与尺寸进入更多资料，逐地点条件进入可展开资料。
+     */
+    private fun fishSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["fishing_locations"]?.let { fact ->
+            val locations = fact.items.mapNotNull { it.value.text }.distinct()
+            if (locations.isNotEmpty()) immediate += EntryFact("捕捞地点", locations.joinToString("、"))
+        }
+        factsBySlot["seasons"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("季节", it)
+        }
+        factsBySlot["fishing_time"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("捕捞时间", it)
+        }
+        factsBySlot["weather"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("天气", it)
+        }
+        factsBySlot["difficulty"]?.value?.integer?.let {
+            immediate += EntryFact("难度", "$it / 110")
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val extra = mutableListOf<EntryFact>()
+        factsBySlot["behavior"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            extra += EntryFact("行为", it)
+        }
+        val minSize = factsBySlot["min_size"]?.value?.integer
+        val maxSize = factsBySlot["max_size"]?.value?.integer
+        if (minSize != null || maxSize != null) {
+            extra += EntryFact("尺寸", "${minSize ?: "?"}–${maxSize ?: "?"} 厘米")
+        }
+        factsBySlot["sell_price"]?.value?.integer?.let {
+            extra += EntryFact("出售价格", "$it 金币")
+        }
+        if (extra.isNotEmpty()) sections += EntrySection("更多资料", extra)
+        factsBySlot["fishing_locations"]?.let { fact ->
+            if (fact.items.isNotEmpty()) {
+                sections += EntrySection("捕捞地点详情", factRows(fact, targets))
+            }
+        }
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 怪物四层详情：立即行动回答在哪遇到/数值与掉落（地点 → 生命/伤害 → 掉落），
+     * 掉落概率条件保留在可展开资料中。
+     */
+    private fun monsterSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["locations"]?.let { fact ->
+            val locations = fact.items.mapNotNull { it.value.text }.distinct()
+            if (locations.isNotEmpty()) immediate += EntryFact("出现地点", locations.joinToString("、"))
+        }
+        factsBySlot["health"]?.value?.integer?.let { immediate += EntryFact("生命值", it.toString()) }
+        factsBySlot["damage"]?.value?.integer?.let { immediate += EntryFact("伤害", it.toString()) }
+        factsBySlot["drops"]?.let { fact ->
+            val names = fact.items
+                .mapNotNull { item -> item.value.text?.let { targets[it]?.nameZh ?: it } }
+                .distinct()
+            if (names.isNotEmpty()) immediate += EntryFact("掉落", names.joinToString("、"))
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        factsBySlot["drops"]?.let { fact ->
+            if (fact.items.isNotEmpty()) {
+                sections += EntrySection("掉落详情", factRows(fact, targets))
+            }
+        }
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 武器四层详情：立即行动回答武器定位（类型 → 伤害区间 → 获得方式），
+     * 出售价格进入更多资料。
+     */
+    private fun weaponSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["weapon_type"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("武器类型", it)
+        }
+        val minDamage = factsBySlot["damage_min"]?.value?.integer
+        val maxDamage = factsBySlot["damage_max"]?.value?.integer
+        if (minDamage != null || maxDamage != null) {
+            immediate += EntryFact("伤害", "${minDamage ?: "?"}–${maxDamage ?: "?"}")
+        }
+        factsBySlot["acquisition"]?.let { fact ->
+            val methods = fact.items.mapNotNull { it.value.text }.distinct()
+            if (methods.isNotEmpty()) immediate += EntryFact("获得方式", methods.joinToString("、"))
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val extra = mutableListOf<EntryFact>()
+        factsBySlot["sell_price"]?.value?.integer?.let { extra += EntryFact("出售价格", "$it 金币") }
+        factsBySlot["purchase_price"]?.value?.integer?.let { extra += EntryFact("购买价格", "$it 金币") }
+        if (extra.isNotEmpty()) sections += EntrySection("更多资料", extra)
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 物品与矿物四层详情：立即行动按物品契约排序（出售价格 → 用途 → 加工），
+     * 完整用途与加工规则（数量/时间/条件）进入可展开资料。
+     */
+    private fun itemSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["sell_price"]?.value?.integer?.let { immediate += EntryFact("出售价格", "$it 金币") }
+        resolvedNames(factsBySlot["used_in"], targets).takeIf { it.isNotEmpty() }?.let {
+            immediate += EntryFact("用途", it.joinToString("、"))
+        }
+        resolvedNames(factsBySlot["machine_uses"], targets).takeIf { it.isNotEmpty() }?.let {
+            immediate += EntryFact("加工", it.joinToString("、"))
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val extra = purchaseInfoFacts(detail, targets)
+        if (extra.isNotEmpty()) sections += EntrySection("更多资料", extra)
+        factsBySlot["machine_uses"]?.let { fact ->
+            if (fact.items.isNotEmpty()) sections += EntrySection("加工用途详情", machineUseRows(detail, targets))
+        }
+        factsBySlot["used_in"]?.let { fact ->
+            if (fact.items.isNotEmpty()) sections += EntrySection("用途详情", usageRows(detail, targets))
+        }
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /**
+     * 戒指四层详情：立即行动 = 出售价格 + 购买/兑换途径；加工规则对戒指无玩家价值，不展示。
+     */
+    private fun ringSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["sell_price"]?.value?.integer?.let { immediate += EntryFact("出售价格", "$it 金币") }
+        immediate += purchaseInfoFacts(detail, targets)
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /** 用途/加工的目标实体中文名（去重）。 */
+    private fun resolvedNames(
+        fact: Schema5Fact?,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<String> = fact?.items.orEmpty()
+        .mapNotNull { item -> item.value.text?.let { targets[it]?.nameZh ?: it } }
+        .distinct()
+
+    /** 加工规则行：机器名 + 每次数量/耗时 + 输入条件。 */
+    private fun machineUseRows(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntryFact> {
+        val bySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val uses = bySlot["machine_uses"]?.items.orEmpty()
+        val minutes = bySlot["machine_use_minutes"]?.items.orEmpty().associateBy { it.scopeId }
+        val counts = bySlot["machine_use_required_count"]?.items.orEmpty().associateBy { it.scopeId }
+        return uses.mapNotNull { item ->
+            val name = item.value.text?.let { targets[it]?.nameZh ?: it } ?: return@mapNotNull null
+            val parts = mutableListOf<String>()
+            counts[item.scopeId]?.value?.integer?.let { parts += "每次 $it 个" }
+            minutes[item.scopeId]?.value?.integer?.let { parts += "耗时 ${minutesText(it)}" }
+            val condition = conditionFact(item.condition)?.value
+            val value = listOfNotNull(
+                name,
+                parts.joinToString("，").takeIf { it.isNotEmpty() },
+                condition?.let { "条件：$it" },
+            ).joinToString("；")
+            EntryFact("加工", value)
+        }
+    }
+
+    /** 用途行：配方/收集包名 + 使用数量。 */
+    private fun usageRows(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntryFact> {
+        val bySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val uses = bySlot["used_in"]?.items.orEmpty()
+        val quantities = bySlot["used_in_quantity"]?.items.orEmpty().associateBy { it.scopeId }
+        return uses.mapNotNull { item ->
+            val name = item.value.text?.let { targets[it]?.nameZh ?: it } ?: return@mapNotNull null
+            val quantity = quantities[item.scopeId]?.value?.integer
+            EntryFact("用途", listOfNotNull(name, quantity?.let { "×$it" }).joinToString(" "))
+        }
+    }
+
+    /** 购买/兑换途径：固定价、动态规则与兑换成本。 */
+    private fun purchaseInfoFacts(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntryFact> {
+        val bySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val rows = mutableListOf<EntryFact>()
+        bySlot["purchase_price"]?.let { fact ->
+            when {
+                fact.status == Schema5FactStatus.DYNAMIC_RULE ->
+                    rows += EntryFact("购买价格", "动态规则（随商店报价变化）")
+                fact.value?.integer != null -> rows += EntryFact("购买价格", "${fact.value.integer} 金币")
+                else -> fact.items.firstOrNull()?.value?.integer?.let {
+                    rows += EntryFact("购买价格", "$it 金币")
+                }
+            }
+        }
+        bySlot["purchase_exchange_item_id"]?.let { fact ->
+            val amount = bySlot["purchase_exchange_amount"]?.items.orEmpty()
+                .associateBy { it.scopeId }[fact.items.firstOrNull()?.scopeId]?.value?.integer
+            val item = fact.items.firstOrNull()?.value?.text
+                ?.let { targets[it]?.nameZh ?: it }
+            if (!item.isNullOrBlank()) {
+                rows += EntryFact("兑换", listOfNotNull(item, amount?.let { "×$it" }).joinToString(" "))
+            }
+        }
+        return rows
+    }
+
+    private fun minutesText(minutes: Long): String = when {
+        minutes >= 60L && minutes % 60L == 0L -> "${minutes / 60L} 小时"
+        minutes > 60L -> "${minutes / 60L} 小时 ${minutes % 60L} 分钟"
+        else -> "$minutes 分钟"
+    }
+
+    /** 家具四层详情：立即行动 = 购买/目录规则与兑换；用途进入更多资料。 */
+    private fun furnitureSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["purchase_price"]?.let { fact ->
+            when {
+                fact.value?.integer != null -> immediate += EntryFact("购买价格", "${fact.value.integer} 金币")
+                fact.items.firstOrNull()?.value?.integer != null ->
+                    immediate += EntryFact("购买价格", "${fact.items.first().value.integer} 金币")
+                fact.status == Schema5FactStatus.DYNAMIC_RULE -> {
+                    val rule = factsBySlot["purchase_price_rule"]?.items?.firstOrNull()?.value?.text
+                        ?: "目录报价规则"
+                    immediate += EntryFact("购买价格", rule)
+                }
+            }
+        }
+        factsBySlot["purchase_exchange_item_id"]?.let { fact ->
+            val amount = factsBySlot["purchase_exchange_amount"]?.items.orEmpty()
+                .associateBy { it.scopeId }[fact.items.firstOrNull()?.scopeId]?.value?.integer
+            val item = fact.items.firstOrNull()?.value?.text?.let { targets[it]?.nameZh ?: it }
+            if (!item.isNullOrBlank()) {
+                immediate += EntryFact("兑换", listOfNotNull(item, amount?.let { "×$it" }).joinToString(" "))
+            }
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        resolvedNames(factsBySlot["used_in"], targets).takeIf { it.isNotEmpty() }?.let {
+            sections += EntrySection("更多资料", listOf(EntryFact("用途", it.joinToString("、"))))
+        }
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /** 鞋类四层详情：立即行动 = 防御/免疫 → 购买/兑换途径。 */
+    private fun footwearSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["defense"]?.value?.integer?.let { immediate += EntryFact("防御", it.toString()) }
+        factsBySlot["immunity"]?.value?.integer?.let { immediate += EntryFact("免疫", it.toString()) }
+        immediate += purchaseInfoFacts(detail, targets)
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /** 料理四层详情：立即行动 = 材料摘要；完整材料清单进入更多资料。 */
+    private fun cookingSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val materialRows = recipeMaterialRows(detail, targets)
+        val immediate = mutableListOf<EntryFact>()
+        materialRows.take(4).forEach { (name, quantity) ->
+            immediate += EntryFact("材料", listOfNotNull(name, quantity?.let { "×$it" }).joinToString(" "))
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        if (materialRows.size > 4) {
+            sections += EntrySection("材料清单", materialRows.map { (name, quantity) ->
+                EntryFact("材料", listOfNotNull(name, quantity?.let { "×$it" }).joinToString(" "))
+            })
+        }
+        factsBySlot["crafting_output_item_id"]?.value?.text?.let { reference ->
+            targets[reference]?.nameZh?.takeIf { it.isNotBlank() }?.let { name ->
+                sections += EntrySection("更多资料", listOf(EntryFact("产物", name)))
+            }
+        }
+        val notes = dataNotes(detail, emptyList())
+        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+        return sections
+    }
+
+    /** 配方材料行：名称 + 数量（类别材料已是中文文案）。 */
+    private fun recipeMaterialRows(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<Pair<String, Long?>> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val materials = factsBySlot["crafting_material_id"]?.items.orEmpty()
+        val quantities = factsBySlot["crafting_material_quantity"]?.items.orEmpty()
+            .associateBy { it.scopeId }
+        return materials.mapNotNull { item ->
+            val raw = item.value.text ?: return@mapNotNull null
+            val name = targets[raw]?.nameZh ?: raw
+            name to quantities[item.scopeId]?.value?.integer
+        }
+    }
+
+    private fun genericSections(
+        detail: Schema5EntityDetail,
+        incomingRelations: List<Schema5Relation>,
+        targets: Map<String, Schema5EntitySummary>,
     ): List<EntrySection> {
         val cardFacts = listOfNotNull(
             detail.summary.card.actionSummary1?.let { EntryFact("行动摘要", it) },
             detail.summary.card.actionSummary2?.let { EntryFact("行动摘要", it) },
         )
-        val facts = cardFacts + detail.facts.flatMap(::factRows)
+        val facts = cardFacts + detail.facts.flatMap { fact -> factRows(fact, targets) }
         val aliases = detail.aliases.takeIf { it.isNotEmpty() }?.let {
             EntrySection("别名", listOf(EntryFact("别名", it.joinToString("、"))))
         }
-        val sources = (detail.facts.flatMap { it.sources } + detail.relationGroups.flatMap { group ->
-            group.relations.flatMap { it.sources }
-        } + incomingRelations.flatMap { it.sources }).distinctBy {
-            listOf(
-                it.kind, it.title, it.gameVersion, it.revision, it.sourceUrl, it.reviewedAt,
-                it.evidenceKind, it.transformationRule, it.reviewStatus, it.conflictStatus, it.expiresAt,
-            )
-        }.takeIf { it.isNotEmpty() }?.let { rows ->
-            EntrySection(
-                "数据说明",
-                rows.map { source ->
-                    EntryFact(
-                        "来源",
-                        sourceDescription(source),
-                    )
-                },
-            )
-        }
+        val notes = dataNotes(detail, incomingRelations)
         return listOfNotNull(
             facts.takeIf { it.isNotEmpty() }?.let { EntrySection("核心信息", it) },
             aliases,
-            sources,
+            notes.takeIf { it.isNotEmpty() }?.let { EntrySection("数据说明", it) },
         )
+    }
+
+    /** 数据说明只使用玩家可理解文案；技术细节留在数据库与诊断入口。 */
+    private fun dataNotes(
+        detail: Schema5EntityDetail,
+        incomingRelations: List<Schema5Relation>,
+    ): List<EntryFact> {
+        val phrases = (
+            detail.facts.flatMap { it.sources } +
+                detail.relationGroups.flatMap { group -> group.relations.flatMap { it.sources } } +
+                incomingRelations.flatMap { it.sources }
+            ).map { source -> sourcePhrase(source) }
+            .distinct()
+        return phrases.map { EntryFact("来源", it) }
     }
 
     private fun supportSubmenus(
@@ -274,13 +904,7 @@ class Schema5WikiCatalogue @Inject constructor(
                         WikiEntrySubmenuGroup(
                             title = "日程记录",
                             items = fact.items.mapIndexed { index, item ->
-                                val details = item.value.text.orEmpty().split('；').mapNotNull { part ->
-                                    val separator = part.indexOf('：')
-                                    if (separator <= 0) null else EntryFact(
-                                        part.substring(0, separator),
-                                        part.substring(separator + 1),
-                                    )
-                                }
+                                val details = scheduleDetails(item.value.text.orEmpty())
                                 WikiEntrySubmenuItem("记录 ${index + 1}", details)
                             },
                         ),
@@ -300,7 +924,7 @@ class Schema5WikiCatalogue @Inject constructor(
                                 val target = targets[value]?.let { summary ->
                                     RelationTarget.Entry(summary.id, summary.nameZh, imageFor(summary.visual))
                                 }
-                                WikiEntrySubmenuItem(value, target = target)
+                                WikiEntrySubmenuItem(target?.title ?: value, target = target)
                             },
                         )
                     }
@@ -310,11 +934,100 @@ class Schema5WikiCatalogue @Inject constructor(
                     groups = groups,
                 )
             }
-        return listOfNotNull(schedule, gifts)
+        val uses = detail.facts.firstOrNull { it.slotKey == "used_in" }
+            ?.takeIf { it.items.isNotEmpty() }
+            ?.let { fact ->
+                val quantities = detail.facts.firstOrNull { it.slotKey == "used_in_quantity" }
+                    ?.items.orEmpty().associateBy { it.scopeId }
+                WikiEntrySubmenu(
+                    title = "用途",
+                    summary = "已收录 ${fact.items.size} 处用途",
+                    groups = listOf(
+                        WikiEntrySubmenuGroup(
+                            title = "用途",
+                            items = fact.items.map { item ->
+                                val value = item.value.text.orEmpty()
+                                val target = targets[value]?.let { summary ->
+                                    RelationTarget.Entry(summary.id, summary.nameZh, imageFor(summary.visual))
+                                }
+                                val quantity = quantities[item.scopeId]?.value?.integer
+                                val label = listOfNotNull(target?.title ?: value, quantity?.let { "×$it" })
+                                    .joinToString(" ")
+                                WikiEntrySubmenuItem(label, target = target)
+                            },
+                        ),
+                    ),
+                )
+            }
+        val shopOffers = if (detail.summary.entityType == "shop") {
+            shopOfferRows(detail, targets).takeIf { it.isNotEmpty() }?.let { rows ->
+                WikiEntrySubmenu(
+                    title = "商品",
+                    summary = "已收录 ${rows.size} 件商品报价",
+                    groups = listOf(
+                        WikiEntrySubmenuGroup(
+                            title = "商品报价",
+                            items = rows.map { (label, target) ->
+                                WikiEntrySubmenuItem(label, target = target)
+                            },
+                        ),
+                    ),
+                )
+            }
+        } else {
+            null
+        }
+        val craftMaterials = if (detail.summary.entityType == "big_craftable") {
+            detail.facts.firstOrNull { it.slotKey == "crafting_material_id" }
+                ?.takeIf { it.items.isNotEmpty() }
+                ?.let { fact ->
+                    val quantities = detail.facts
+                        .firstOrNull { it.slotKey == "crafting_material_quantity" }
+                        ?.items.orEmpty().associateBy { it.scopeId }
+                    WikiEntrySubmenu(
+                        title = "材料清单",
+                        summary = "制作需要 ${fact.items.size} 种材料",
+                        groups = listOf(
+                            WikiEntrySubmenuGroup(
+                                title = "材料",
+                                items = fact.items.map { item ->
+                                    val value = item.value.text.orEmpty()
+                                    val target = targets[value]?.let { summary ->
+                                        RelationTarget.Entry(summary.id, summary.nameZh, imageFor(summary.visual))
+                                    }
+                                    val quantity = quantities[item.scopeId]?.value?.integer
+                                    val label = listOfNotNull(target?.title ?: value, quantity?.let { "×$it" })
+                                        .joinToString(" ")
+                                    WikiEntrySubmenuItem(label, target = target)
+                                },
+                            ),
+                        ),
+                    )
+                }
+        } else {
+            null
+        }
+        return listOfNotNull(schedule, gifts, uses, shopOffers, craftMaterials)
     }
 
-    private fun factRows(fact: Schema5Fact): List<EntryFact> {
-        val label = factLabel(fact.slotKey)
+    /** 解析 builder 本地化后的日程文本：「8:00 山姆家」或规则「与周三日程相同」。 */
+    private fun scheduleDetails(text: String): List<EntryFact> =
+        text.split('；').mapNotNull { part ->
+            val trimmed = part.trim()
+            if (trimmed.isEmpty()) return@mapNotNull null
+            val separator = trimmed.indexOf(' ')
+            if (separator > 0 && TIME_PATTERN.matches(trimmed.substring(0, separator))) {
+                EntryFact("时间", trimmed)
+            } else {
+                EntryFact("规则", trimmed)
+            }
+        }
+
+    private fun factRows(
+        fact: Schema5Fact,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntryFact> {
+        val label = factLabel(fact.slotKey) ?: return emptyList()
         val state = when (fact.status) {
             Schema5FactStatus.FIXED -> null
             Schema5FactStatus.CONDITIONAL -> if (fact.condition == null) "条件未完整记录" else null
@@ -324,36 +1037,25 @@ class Schema5WikiCatalogue @Inject constructor(
             Schema5FactStatus.NOT_APPLICABLE -> "不适用"
         }
         val condition = conditionFact(fact.condition)?.value
-        val prefix = state ?: fact.value?.display() ?: "暂未提供"
-        val sourceNote = fact.sources.takeIf { it.isNotEmpty() }?.joinToString("、", transform = ::sourceDescription)
+        val prefix = state ?: fact.value?.display()?.let { display -> targets[display]?.nameZh ?: display } ?: "暂未提供"
         val value = listOfNotNull(
             prefix,
             condition?.let { "条件：$it" },
-            sourceNote?.let { "来源：$it" },
         ).joinToString("；")
         val rows = mutableListOf(EntryFact(label, value))
         fact.items.forEach { item ->
             rows += EntryFact(
                 label,
                 listOfNotNull(
-                    item.value.display(),
-                    item.scopeId?.let {
-                        if (fact.slotKey == "gift_preferences") {
-                            "偏好：${giftPreferenceLabel(it)}"
-                        } else {
-                            "范围：$it"
-                        }
-                    },
+                    item.value.display().let { display -> targets[display]?.nameZh ?: display },
                     conditionFact(item.condition)?.value?.let { "条件：$it" },
-                    item.sources.takeIf { it.isNotEmpty() }?.joinToString("、", transform = ::sourceDescription)
-                        ?.let { "来源：$it" },
                 ).joinToString("；"),
             )
         }
         return rows
     }
 
-    private fun factLabel(slotKey: String): String = when (slotKey) {
+    private fun factLabel(slotKey: String): String? = when (slotKey) {
         "sell_price" -> "出售价格"
         "purchase_price" -> "购买价格"
         "seed_purchase_price" -> "种子购买价格"
@@ -383,6 +1085,11 @@ class Schema5WikiCatalogue @Inject constructor(
         "gift_preferences" -> "礼物偏好"
         "locations" -> "出现地点"
         "drops" -> "掉落"
+        "health" -> "生命值"
+        "damage" -> "伤害"
+        "defense" -> "防御"
+        "immunity" -> "免疫"
+        "weapon_type" -> "武器类型"
         "acquisition" -> "获得方式"
         "damage_min" -> "最低伤害"
         "damage_max" -> "最高伤害"
@@ -397,7 +1104,7 @@ class Schema5WikiCatalogue @Inject constructor(
         "used_in" -> "用途"
         "used_in_quantity" -> "使用数量"
         "used_in_quality" -> "品质规则"
-        else -> slotKey.replace('_', ' ').trim().ifBlank { "信息" }
+        else -> null
     }
 
     private fun giftPreferenceLabel(scopeId: String): String = when {
@@ -415,23 +1122,24 @@ class Schema5WikiCatalogue @Inject constructor(
             .let { index -> if (index < 0) Int.MAX_VALUE else index }
     }
 
-    private fun sourceDescription(source: com.example.stardewoffline.core.model.Schema5SourceSummary): String =
-        listOfNotNull(
-            when (source.kind) {
-                "official_direct" -> "官方原始数据"
-                "official_derived" -> "官方派生数据"
-                "supplemental_reviewed" -> "审核补充资料"
-                else -> source.kind
-            },
-            source.title,
-            source.gameVersion?.let { "版本 $it" },
-            source.revision?.let { "修订 $it" },
-            source.evidenceKind?.let { "证据 $it" },
-            source.transformationRule?.let { "转换 $it" },
-            source.reviewStatus?.takeUnless { it == "not_required" }?.let { "审核 $it" },
-            source.conflictStatus?.takeUnless { it == "none" }?.let { "冲突 $it" },
-            source.expiresAt?.let { "有效期至 $it" },
-        ).joinToString("；")
+    private companion object {
+        val TIME_PATTERN = Regex("^\\d{1,2}:\\d{2}$")
+    }
+
+    /** 普通页面只允许玩家可理解来源文案；路径、版本、证据与转换规则留在诊断层。 */
+    private fun sourcePhrase(source: com.example.stardewoffline.core.model.Schema5SourceSummary): String =
+        when (source.kind) {
+            "official_direct" -> "依据游戏数据整理"
+            "official_derived" -> "依据游戏数据计算"
+            else -> "依据游戏数据整理"
+        }
+
+    private fun relationFamilyLabel(family: String): String = when (family) {
+        "kinship" -> "亲属关系"
+        "friendship" -> "朋友关系"
+        "love_interest" -> "角色资料"
+        else -> "关联内容"
+    }
 
     private fun relationLabel(predicate: String): String = when (predicate) {
         "kinship" -> "亲属关系"
@@ -464,7 +1172,11 @@ class Schema5WikiCatalogue @Inject constructor(
         WikiEntrySummary(
             id = summary.id,
             title = summary.nameZh,
-            englishTitle = englishTitleForDisplay(summary.nameZh, summary.nameEn),
+            englishTitle = if (summary.entityType == "villager") {
+                null
+            } else {
+                englishTitleForDisplay(summary.nameZh, summary.nameEn)
+            },
             categoryLabel = label,
             filterCategories = summary.facets.mapNotNull { it.value.text }.toSet(),
             image = imageFor(summary.visual),

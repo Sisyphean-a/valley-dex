@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -261,9 +262,15 @@ private fun CatalogueContent(
             }
         } else {
             Column(Modifier.weight(1f).fillMaxWidth()) {
+                val fontScale = LocalDensity.current.fontScale
+                val gridMinSize = when {
+                    fontScale >= 2.0f -> 200.dp
+                    fontScale >= 1.3f -> 160.dp
+                    else -> 140.dp
+                }
                 LazyVerticalGrid(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    columns = GridCells.Adaptive(minSize = 140.dp),
+                    columns = GridCells.Adaptive(minSize = gridMinSize),
                     contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
