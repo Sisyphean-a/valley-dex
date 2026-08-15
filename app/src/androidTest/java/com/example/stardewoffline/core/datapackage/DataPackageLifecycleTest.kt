@@ -118,8 +118,14 @@ class DataPackageLifecycleTest {
         val fixture = SyntheticSchema5DataPackageFactory(context).create(variant)
         return try {
             fixture.archive.inputStream().use { input -> scenario.dataPackages.installAndActivate(input) }
+                .also { result ->
+                    if (result is AppResult.Failure) {
+                        error("$variant fixture 导入失败：${result.error.message}")
+                    }
+                }
         } finally {
             fixture.close()
         }
     }
+
 }

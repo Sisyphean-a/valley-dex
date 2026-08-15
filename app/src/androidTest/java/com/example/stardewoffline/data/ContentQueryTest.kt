@@ -168,7 +168,10 @@ class ContentQueryTest {
             assertEquals("official_direct", fishItem.sources.single().kind)
             assertEquals("春季", crop.summary.facets.single().value.text)
             assertEquals("derived", crop.summary.facets.single().sources.single().evidenceKind)
-            assertEquals("schema 5 instrumentation fixture", crop.facts.single().sources.single().title)
+            assertEquals(
+                "schema 5 instrumentation fixture",
+                crop.facts.single { it.slotKey == "fixture_answer" }.sources.single().title,
+            )
         } finally {
             scenario.close()
         }

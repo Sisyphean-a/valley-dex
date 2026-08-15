@@ -40,8 +40,8 @@ class SyntheticSchema5DataPackageFactory(private val context: Context) {
         }
         writeImage(root)
         val database = createDatabase(root, variant, searchStorage)
-        writeManifest(root, database, variant)
         writeReleaseEvidence(root, database, variant)
+        writeManifest(root, database, variant)
         bindManifestArtifacts(root)
         writeArchive(root)
         return SyntheticSchema5DataPackage(root)
@@ -201,6 +201,12 @@ class SyntheticSchema5DataPackageFactory(private val context: Context) {
         insertCoreFactSlots(database, entities)
         database.execSQL("INSERT INTO id_aliases(alias_id, entity_id, reason) VALUES ('legacy:object:1', 'object:1', 'fixture migration alias')")
         database.execSQL("INSERT INTO entity_aliases(entity_id, alias, alias_type) VALUES ('object:1', '根菜', 'synonym')")
+        database.execSQL("INSERT INTO relation_groups(id, entity_id, family, status) VALUES ('relation-group:crop:1:harvest', 'crop:1', 'harvest', 'fixed')")
+        database.execSQL("INSERT INTO relations(id, relation_group_id, subject_entity_id, predicate, object_entity_id, original_direction, label) VALUES ('relation:crop:1:harvest:object:1', 'relation-group:crop:1:harvest', 'crop:1', 'harvests', 'object:1', 'forward', '收获')")
+        database.execSQL("INSERT INTO evidence(id, source_locator_id, evidence_kind, transformation_rule, input_claim_id) VALUES ('evidence:relation-group:crop:1:harvest', 'locator:fixture', 'derived', 'fixture-harvest-v1', 'crop:1')")
+        database.execSQL("INSERT INTO claim_evidence(claim_id, evidence_id, claim_type) VALUES ('relation-group:crop:1:harvest', 'evidence:relation-group:crop:1:harvest', 'relation_group')")
+        database.execSQL("INSERT INTO evidence(id, source_locator_id, evidence_kind, transformation_rule, input_claim_id) VALUES ('evidence:relation:crop:1:harvest:object:1', 'locator:fixture', 'derived', 'fixture-harvest-v1', 'crop:1')")
+        database.execSQL("INSERT INTO claim_evidence(claim_id, evidence_id, claim_type) VALUES ('relation:crop:1:harvest:object:1', 'evidence:relation:crop:1:harvest:object:1', 'relation')")
         database.execSQL("INSERT INTO browse_facet_groups(id, entity_id, family, status) VALUES ('facet-group:crop:season', 'crop:1', 'season', 'fixed')")
         database.execSQL("INSERT INTO browse_facets(id, group_id, scope_family, scope_id, value_type, text_value, claim_status) VALUES ('facet:crop:season:spring', 'facet-group:crop:season', 'season', 'season:crop:1', 'text', '春季', 'fixed')")
         database.execSQL("INSERT INTO evidence(id, source_locator_id, evidence_kind, transformation_rule, input_claim_id) VALUES ('evidence:facet:crop-season', 'locator:fixture', 'derived', 'fixture-facet-v1', NULL)")
@@ -292,9 +298,9 @@ class SyntheticSchema5DataPackageFactory(private val context: Context) {
                     }
                 }
                 append(slots.joinToString(",") { key ->
-                    "\"$key\":{\"answeredRate\":1.0,\"notCollectedRate\":0.0,\"minimumAnsweredRate\":1.0,\"maximumNotCollectedRate\":0.0}"
+                    "\"$key\":{\"eligible\":1,\"answered\":1,\"unknown\":0,\"notCollected\":0,\"answeredRate\":1.0,\"notCollectedRate\":0.0,\"minimumAnsweredRate\":1.0,\"maximumNotCollectedRate\":0.0}"
                 })
-                append("},\"relationGroups\":{\"eligible\":0,\"answeredRate\":1.0,\"notCollectedRate\":0.0},\"conditions\":{\"complete\":1,\"partial\":0,\"opaque\":0,\"completeRate\":1.0,\"opaqueRate\":0.0}}")
+                append("}},\"relationGroups\":{\"eligible\":1,\"answeredRate\":1.0,\"notCollectedRate\":0.0},\"conditions\":{\"complete\":1,\"partial\":0,\"opaque\":0,\"completeRate\":1.0,\"opaqueRate\":0.0}}")
             },
         ),
     )
@@ -323,7 +329,7 @@ class SyntheticSchema5DataPackageFactory(private val context: Context) {
         val digest = MessageDigest.getInstance("SHA-256")
         reports.listFiles { file -> file.isFile && file.extension == "json" }
             ?.sortedBy { it.name }
-            ?.forEach { file -> digest.update("${file.name}:${sha256(file)}\\n".toByteArray()) }
+            ?.forEach { file -> digest.update("${file.name}:${sha256(file)}\n".toByteArray()) }
         val reportHash = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
         val updated = manifest.copy(
             artifacts = mapOf(

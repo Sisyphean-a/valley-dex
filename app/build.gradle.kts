@@ -93,6 +93,46 @@ kapt {
     }
 }
 
+tasks.configureEach {
+    if (name == "connectedDebugAndroidTest") {
+        // UTP/ADB can leave unreadable result files after an interrupted device run.
+        // Device tests are externally stateful, so never reuse their prior outputs.
+        doNotTrackState("设备测试结果由 UTP/ADB 写入，不能稳定参与 Gradle 状态跟踪")
+    }
+}
+
+tasks.register("verifyRealV5Package") {
+    group = "verification"
+    description = "用 STARDEW_SVDATA 指定的工作区外 schema 5 包执行设备验收。"
+    dependsOn("assembleDebug", "assembleDebugAndroidTest")
+
+    doLast {
+        val source = providers.environmentVariable("STARDEW_SVDATA").orNull
+            ?.let(::file)
+            ?.takeIf { it.isFile }
+            ?: throw GradleException("verifyRealV5Package 需要指向真实 .svdata 文件的 STARDEW_SVDATA 环境变量")
+        val adb = File(android.sdkDirectory, "platform-tools/adb.exe").absolutePath
+        val remote = "/data/local/tmp/stardew-real-v5.svdata"
+        val debugApk = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
+        val testApk = layout.buildDirectory.file("outputs/apk/androidTest/debug/app-debug-androidTest.apk").get().asFile
+
+        fun runAdb(vararg arguments: String) {
+            val exitCode = ProcessBuilder(arguments.toList()).inheritIO().start().waitFor()
+            check(exitCode == 0) { "ADB 验收命令失败：${arguments.joinToString(" ")}" }
+        }
+        runAdb(adb, "install", "-r", debugApk.absolutePath)
+        runAdb(adb, "install", "-r", testApk.absolutePath)
+        runAdb(adb, "push", source.absolutePath, remote)
+        runAdb(
+            adb, "shell", "am", "instrument", "-w", "-r",
+            "-e", "class", "com.example.stardewoffline.core.datapackage.RealV5PackageAcceptanceTest",
+            "-e", "realV5Required", "true",
+            "-e", "realV5PackagePath", remote,
+            "com.example.stardewoffline.debug.test/androidx.test.runner.AndroidJUnitRunner",
+        )
+    }
+}
+
 tasks.register("verifyRealV4Package") {
     group = "verification"
     description = "用 STARDEW_SVDATA 指定的工作区外 schema 4 包执行设备验收。"

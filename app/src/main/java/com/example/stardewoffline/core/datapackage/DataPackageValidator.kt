@@ -38,6 +38,17 @@ private data class Schema5Conformance(
     val schemaFingerprint: String? = null,
 )
 
+private val P0_CORE_SLOTS = setOf(
+    "fishing_locations", "fishing_time", "locations", "sell_price", "purchase_price",
+    "seed_purchase_price", "crafting_material_id", "crafting_material_quantity",
+    "upgrade_material_id", "upgrade_price", "acquisition", "drops",
+)
+private val STABLE_DIRECT_SLOTS = setOf(
+    "sell_price", "difficulty", "behavior", "min_size", "max_size", "fishing_time",
+    "seasons", "weather", "first_harvest_days", "regrow_days", "needs_watering",
+    "seed_item_id", "harvest_item_id", "residence_region", "birthday", "gender",
+    "can_be_romanced",
+)
 private val CORE_FACT_SLOTS = mapOf(
     "object" to setOf("sell_price"),
     "mineral" to setOf("sell_price"),
@@ -198,10 +209,10 @@ class DataPackageValidator @Inject constructor(
                     while (cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1))
                 }
             }
-            val declaredCapabilities = buildList {
-                manifest.capabilities.required.sorted().forEach { add(it to "required") }
-                manifest.capabilities.optional.sorted().forEach { add(it to "optional") }
-            }
+            val declaredCapabilities = (
+                manifest.capabilities.required.map { it to "required" } +
+                    manifest.capabilities.optional.map { it to "optional" }
+                ).sortedWith(compareBy<Pair<String, String>> { it.first }.thenBy { it.second })
             if (capabilityRows != declaredCapabilities) {
                 return AppResult.Failure(AppError.MetadataMismatch("package_capabilities"))
             }
@@ -262,29 +273,44 @@ class DataPackageValidator @Inject constructor(
         for (key in expectedSlots) {
             val row = bySlot[key] as? JsonObject
                 ?: return AppError.MetadataMismatch("coverage.$key")
-            val answered = (row["answeredRate"] as? JsonPrimitive)?.doubleOrNull
-                ?: return AppError.MetadataMismatch("coverage.$key.answeredRate")
-            val notCollected = (row["notCollectedRate"] as? JsonPrimitive)?.doubleOrNull
-                ?: return AppError.MetadataMismatch("coverage.$key.notCollectedRate")
-            val minimum = (row["minimumAnsweredRate"] as? JsonPrimitive)?.doubleOrNull
-                ?: return AppError.MetadataMismatch("coverage.$key.minimumAnsweredRate")
-            val maximumMissing = (row["maximumNotCollectedRate"] as? JsonPrimitive)?.doubleOrNull
-                ?: return AppError.MetadataMismatch("coverage.$key.maximumNotCollectedRate")
-            if (answered !in 0.0..1.0 || notCollected !in 0.0..1.0 ||
-                minimum !in 0.0..1.0 || maximumMissing !in 0.0..1.0 ||
-                answered < minimum || notCollected > maximumMissing
-            ) {
-                return AppError.DatabaseCorrupted("核心事实覆盖未达发布门槛：$key")
-            }
             val separator = key.indexOf(':')
             val entityType = key.substring(0, separator)
             val slotKey = key.substring(separator + 1)
-            val missingRows = database.rawQuery(
-                "SELECT COUNT(*) FROM entities e WHERE e.entity_type = ? " +
-                    "AND NOT EXISTS (SELECT 1 FROM fact_slots f WHERE f.entity_id = e.id AND f.slot_key = ?)",
+            val counts = database.rawQuery(
+                "SELECT " +
+                    "SUM(CASE WHEN status != 'not_applicable' THEN 1 ELSE 0 END), " +
+                    "SUM(CASE WHEN status IN ('fixed', 'conditional', 'dynamic_rule') THEN 1 ELSE 0 END), " +
+                    "SUM(CASE WHEN status = 'not_collected' THEN 1 ELSE 0 END) " +
+                    "FROM fact_slots WHERE entity_id IN (SELECT id FROM entities WHERE entity_type = ?) " +
+                    "AND slot_key = ?",
                 arrayOf(entityType, slotKey),
-            ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) > 0 }
-            if (missingRows) return AppError.DatabaseCorrupted("核心事实槽缺失：$key")
+            ).use { cursor ->
+                cursor.moveToFirst()
+                Triple(cursor.getInt(0), cursor.getInt(1), cursor.getInt(2))
+            }
+            val entityCount = database.rawQuery(
+                "SELECT COUNT(*) FROM entities WHERE entity_type = ?",
+                arrayOf(entityType),
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            if (counts.first + database.rawQuery(
+                    "SELECT COUNT(*) FROM fact_slots WHERE entity_id IN (SELECT id FROM entities WHERE entity_type = ?) " +
+                        "AND slot_key = ? AND status = 'not_applicable'",
+                    arrayOf(entityType, slotKey),
+                ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) } != entityCount
+            ) return AppError.DatabaseCorrupted("核心事实槽缺失：$key")
+            val answeredRate = if (counts.first == 0) 1.0 else counts.second.toDouble() / counts.first
+            val notCollectedRate = if (counts.first == 0) 0.0 else counts.third.toDouble() / counts.first
+            val minimum = if (slotKey in STABLE_DIRECT_SLOTS) 1.0 else if (slotKey in P0_CORE_SLOTS) 0.95 else 0.85
+            val maximumMissing = if (slotKey in STABLE_DIRECT_SLOTS) 0.0 else if (slotKey in P0_CORE_SLOTS) 0.02 else 0.10
+            if (answeredRate < minimum || notCollectedRate > maximumMissing) {
+                return AppError.DatabaseCorrupted("核心事实覆盖未达发布门槛：$key")
+            }
+            val reportedEligible = (row["eligible"] as? JsonPrimitive)?.intOrNull
+            val reportedAnswered = (row["answered"] as? JsonPrimitive)?.intOrNull
+            val reportedNotCollected = (row["notCollected"] as? JsonPrimitive)?.intOrNull
+            if (reportedEligible != counts.first || reportedAnswered != counts.second || reportedNotCollected != counts.third) {
+                return AppError.MetadataMismatch("coverage.$key")
+            }
         }
         val relationGroups = release["relationGroups"] as? JsonObject
             ?: return AppError.MetadataMismatch("coverage.release.relationGroups")
@@ -294,28 +320,39 @@ class DataPackageValidator @Inject constructor(
             ?: return AppError.MetadataMismatch("coverage.relationGroups.answeredRate")
         val relationMissing = (relationGroups["notCollectedRate"] as? JsonPrimitive)?.doubleOrNull
             ?: return AppError.MetadataMismatch("coverage.relationGroups.notCollectedRate")
-        if (relationEligible < 0 || relationAnswered !in 0.0..1.0 || relationMissing !in 0.0..1.0 ||
-            (relationEligible > 0 && (relationAnswered < 0.90 || relationMissing > 0.05))
-        ) {
-            return AppError.DatabaseCorrupted("人物关系组覆盖未达发布门槛")
-        }
+        val actualRelationRows = database.rawQuery(
+            "SELECT SUM(CASE WHEN status != 'not_applicable' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('fixed', 'conditional', 'dynamic_rule') THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'not_collected' THEN 1 ELSE 0 END) FROM relation_groups",
+            null,
+        ).use { cursor -> cursor.moveToFirst(); Triple(cursor.getInt(0), cursor.getInt(1), cursor.getInt(2)) }
+        val actualRelationAnswered = if (actualRelationRows.first == 0) 1.0 else actualRelationRows.second.toDouble() / actualRelationRows.first
+        val actualRelationMissing = if (actualRelationRows.first == 0) 0.0 else actualRelationRows.third.toDouble() / actualRelationRows.first
+        if (relationEligible != actualRelationRows.first ||
+            !approximatelyEqual(relationAnswered, actualRelationAnswered) ||
+            !approximatelyEqual(relationMissing, actualRelationMissing) ||
+            (actualRelationRows.first > 0 && (actualRelationAnswered < 0.90 || actualRelationMissing > 0.05))
+        ) return AppError.DatabaseCorrupted("人物关系组覆盖未达发布门槛")
         val conditions = release["conditions"] as? JsonObject
             ?: return AppError.MetadataMismatch("coverage.release.conditions")
-        val conditionTotal = listOf("complete", "partial", "opaque").sumOf { key ->
-            (conditions[key] as? JsonPrimitive)?.intOrNull
-                ?: return AppError.MetadataMismatch("coverage.conditions.$key")
-        }
-        val completeRate = (conditions["completeRate"] as? JsonPrimitive)?.doubleOrNull
-            ?: return AppError.MetadataMismatch("coverage.conditions.completeRate")
-        val opaqueRate = (conditions["opaqueRate"] as? JsonPrimitive)?.doubleOrNull
-            ?: return AppError.MetadataMismatch("coverage.conditions.opaqueRate")
-        if (conditionTotal < 0 || completeRate !in 0.0..1.0 || opaqueRate !in 0.0..1.0 ||
+        val actualConditions = database.rawQuery(
+            "SELECT completeness, COUNT(*) FROM condition_sets GROUP BY completeness",
+            null,
+        ).use { cursor -> buildMap { while (cursor.moveToNext()) put(cursor.getString(0), cursor.getInt(1)) } }
+        val conditionTotal = actualConditions.values.sum()
+        val completeRate = if (conditionTotal == 0) 1.0 else actualConditions.getOrDefault("complete", 0).toDouble() / conditionTotal
+        val opaqueRate = if (conditionTotal == 0) 0.0 else actualConditions.getOrDefault("opaque", 0).toDouble() / conditionTotal
+        if (listOf("complete", "partial", "opaque").any { key ->
+                (conditions[key] as? JsonPrimitive)?.intOrNull != actualConditions.getOrDefault(key, 0)
+            } || !approximatelyEqual((conditions["completeRate"] as? JsonPrimitive)?.doubleOrNull, completeRate) ||
+            !approximatelyEqual((conditions["opaqueRate"] as? JsonPrimitive)?.doubleOrNull, opaqueRate) ||
             (conditionTotal > 0 && (completeRate < 0.95 || opaqueRate > 0.01))
-        ) {
-            return AppError.DatabaseCorrupted("条件完整性未达发布门槛")
-        }
+        ) return AppError.DatabaseCorrupted("条件完整性未达发布门槛")
         return null
     }
+
+    private fun approximatelyEqual(reported: Double?, actual: Double): Boolean =
+        reported != null && kotlin.math.abs(reported - actual) < 0.000001
 
     private fun validateV5Sources(database: SQLiteDatabase): AppError? {
         val rows = database.rawQuery(
@@ -355,6 +392,22 @@ class DataPackageValidator @Inject constructor(
                     return AppError.DatabaseCorrupted("来源已过期或时间格式无效")
                 }
             }
+        }
+        val invalidMonsterLocationSources = database.rawQuery(
+            "SELECT COUNT(*) FROM fact_slots f " +
+                "JOIN claim_evidence claim ON claim.claim_id = f.id AND claim.claim_type = 'fact_slot' " +
+                "JOIN evidence e ON e.id = claim.evidence_id " +
+                "JOIN source_locators locator ON locator.id = e.source_locator_id " +
+                "JOIN source_documents source ON source.id = locator.source_document_id " +
+                "WHERE f.slot_key = 'locations' AND f.status = 'conditional' " +
+                "AND f.entity_id IN (SELECT id FROM entities WHERE entity_type = 'monster') " +
+                "AND (locator.source_file != 'Stardew Valley.dll' OR locator.record_key IS NULL OR trim(locator.record_key) = '' " +
+                "OR source.game_version IS NULL OR source.game_version != (SELECT value FROM build_meta WHERE key = 'game_version') " +
+                "OR source.content_hash IS NULL OR source.content_hash GLOB '*[^0-9a-fA-F]*' OR length(source.content_hash) != 64)",
+            null,
+        ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) > 0 }
+        if (invalidMonsterLocationSources) {
+            return AppError.DatabaseCorrupted("怪物运行时地点缺少版本绑定的 DLL 来源")
         }
         return null
     }
@@ -523,6 +576,23 @@ class DataPackageValidator @Inject constructor(
                         EXISTS (SELECT 1 FROM fact_items i WHERE i.slot_id = f.id)
                     ) OR
                     (
+                        f.status = 'dynamic_rule' AND
+                        f.text_value IS NULL AND f.integer_value IS NULL AND
+                        f.real_value IS NULL AND f.boolean_value IS NULL AND
+                        EXISTS (
+                            SELECT 1 FROM fact_slots rule
+                            WHERE rule.entity_id = f.entity_id
+                              AND rule.slot_key = f.slot_key || '_rule'
+                              AND (
+                                EXISTS (SELECT 1 FROM fact_items item WHERE item.slot_id = rule.id) OR
+                                (rule.value_type = 'text' AND rule.text_value IS NOT NULL AND rule.integer_value IS NULL AND rule.real_value IS NULL AND rule.boolean_value IS NULL) OR
+                                (rule.value_type = 'integer' AND rule.text_value IS NULL AND rule.integer_value IS NOT NULL AND rule.real_value IS NULL AND rule.boolean_value IS NULL) OR
+                                (rule.value_type = 'real' AND rule.text_value IS NULL AND rule.integer_value IS NULL AND rule.real_value IS NOT NULL AND rule.boolean_value IS NULL) OR
+                                (rule.value_type = 'boolean' AND rule.text_value IS NULL AND rule.integer_value IS NULL AND rule.real_value IS NULL AND rule.boolean_value IS NOT NULL)
+                              )
+                        )
+                    ) OR
+                    (
                         (f.value_type = 'text' AND f.text_value IS NOT NULL AND f.integer_value IS NULL AND f.real_value IS NULL AND f.boolean_value IS NULL) OR
                         (f.value_type = 'integer' AND f.text_value IS NULL AND f.integer_value IS NOT NULL AND f.real_value IS NULL AND f.boolean_value IS NULL) OR
                         (f.value_type = 'real' AND f.text_value IS NULL AND f.integer_value IS NULL AND f.real_value IS NOT NULL AND f.boolean_value IS NULL) OR
@@ -655,7 +725,7 @@ class DataPackageValidator @Inject constructor(
         if (invalidClaimTypes) return AppError.DatabaseCorrupted("claim 类型与对象不一致")
         val missingEvidence = database.rawQuery(
             """
-            SELECT claim_id, claim_type
+            SELECT claims.claim_id, claims.claim_type
             FROM (
                 SELECT f.id AS claim_id, 'fact_slot' AS claim_type
                 FROM fact_slots f

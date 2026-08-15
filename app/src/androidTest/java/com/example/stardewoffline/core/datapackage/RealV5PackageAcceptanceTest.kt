@@ -2,6 +2,7 @@ package com.example.stardewoffline.core.datapackage
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.stardewoffline.core.common.AppResult
 import com.example.stardewoffline.core.common.getOrNull
 import com.example.stardewoffline.core.model.CatalogueQuery
 import com.example.stardewoffline.data.wiki.Schema5WikiCatalogue
@@ -32,8 +33,10 @@ class RealV5PackageAcceptanceTest {
 
         val scenario = TestAppScenario.create(instrumentationTestContext())
         try {
-            val installed = archive.inputStream().use { scenario.dataPackages.installAndActivate(it) }
-                .getOrNull() ?: error("真实 schema 5 数据包未能安装")
+            val installed = when (val install = archive.inputStream().use { scenario.dataPackages.installAndActivate(it) }) {
+                is AppResult.Success -> install.value
+                is AppResult.Failure -> error("真实 schema 5 数据包未能安装：${install.error.message}")
+            }
             assertTrue(installed.manifest.schemaVersion == 5)
 
             val catalogue = Schema5WikiCatalogue(scenario.dataPackages, scenario.schema5ContentRepository)
