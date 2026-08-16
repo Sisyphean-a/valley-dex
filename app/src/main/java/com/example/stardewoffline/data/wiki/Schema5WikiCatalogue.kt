@@ -260,7 +260,41 @@ class Schema5WikiCatalogue @Inject constructor(
         if (detail.summary.entityType == "achievement") return achievementSections(detail)
         if (detail.summary.entityType == "bundle") return bundleSections(detail)
         if (detail.summary.entityType == "special_order") return specialOrderSections(detail)
+        if (detail.summary.entityType == "tailoring_recipe") return tailoringSections(detail)
+        if (detail.summary.entityType == "drop") return dropSections(detail)
+        if (detail.summary.entityType == "ginger_island") return gingerIslandSections(detail)
         return genericSections(detail, targets)
+    }
+
+    /**
+     * 姜岛事件详情：触发条件（天气/时间窗）。
+     */
+    private fun gingerIslandSections(detail: Schema5EntityDetail): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["ginger_trigger_condition"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("触发条件", it)
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        return sections
+    }
+
+    /**
+     * 掉落详情：概率与来源怪物。
+     */
+    private fun dropSections(detail: Schema5EntityDetail): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["drop_chance"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("掉落概率", it)
+        }
+        factsBySlot["drop_source"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("掉落来源", it)
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        return sections
     }
 
     /**
@@ -332,6 +366,20 @@ class Schema5WikiCatalogue @Inject constructor(
         }
         factsBySlot["bundle_ingredients"]?.value?.text?.takeIf(String::isNotBlank)?.let {
             immediate += EntryFact("所需物品", it)
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        return sections
+    }
+
+    /**
+     * 裁缝配方详情：所需材料与产物。
+     */
+    private fun tailoringSections(detail: Schema5EntityDetail): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["tailoring_materials"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("所需材料", it)
         }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
@@ -1173,6 +1221,10 @@ class Schema5WikiCatalogue @Inject constructor(
         "special_order_requester" -> "委托人"
         "special_order_duration" -> "时限"
         "special_order_objective" -> "目标"
+        "tailoring_materials" -> "所需材料"
+        "drop_chance" -> "掉落概率"
+        "drop_source" -> "掉落来源"
+        "ginger_trigger_condition" -> "触发条件"
         "drops" -> "掉落"
         "health" -> "生命值"
         "damage" -> "伤害"
