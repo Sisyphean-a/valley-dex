@@ -968,7 +968,7 @@ class Schema5WikiCatalogue @Inject constructor(
         return sections
     }
 
-    /** 料理四层详情：立即行动 = 材料摘要；完整材料清单进入更多资料。 */
+    /** 料理四层详情：立即行动 = 获取方式 + 材料摘要；完整材料清单进入更多资料。 */
     private fun cookingSections(
         detail: Schema5EntityDetail,
         targets: Map<String, Schema5EntitySummary>,
@@ -976,6 +976,9 @@ class Schema5WikiCatalogue @Inject constructor(
         val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
         val materialRows = recipeMaterialRows(detail, targets)
         val immediate = mutableListOf<EntryFact>()
+        factsBySlot["recipe_source"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("获取方式", it)
+        }
         materialRows.take(4).forEach { (name, quantity) ->
             immediate += EntryFact("材料", listOfNotNull(name, quantity?.let { "×$it" }).joinToString(" "))
         }
@@ -1244,6 +1247,7 @@ class Schema5WikiCatalogue @Inject constructor(
         "tailoring_materials" -> "所需材料"
         "drop_chance" -> "掉落概率"
         "drop_source" -> "掉落来源"
+        "recipe_source" -> "获取方式"
         "ginger_trigger_condition" -> "触发条件"
         "drops" -> "掉落"
         "health" -> "生命值"
