@@ -799,6 +799,23 @@ class Schema5WikiCatalogue @Inject constructor(
         if (minDamage != null || maxDamage != null) {
             immediate += EntryFact("伤害", "${minDamage ?: "?"}–${maxDamage ?: "?"}")
         }
+        factsBySlot["weapon_speed"]?.value?.integer?.let {
+            immediate += EntryFact("速度", it.toString())
+        }
+        factsBySlot["weapon_precision"]?.value?.integer?.let {
+            immediate += EntryFact("精准", it.toString())
+        }
+        factsBySlot["weapon_defense"]?.value?.integer?.let {
+            immediate += EntryFact("防御", it.toString())
+        }
+        val critChance = factsBySlot["weapon_crit_chance"]?.value?.text
+        val critMultiplier = factsBySlot["weapon_crit_multiplier"]?.value?.text
+        if (!critChance.isNullOrBlank() || !critMultiplier.isNullOrBlank()) {
+            immediate += EntryFact(
+                "暴击",
+                listOfNotNull(critChance, critMultiplier).joinToString("，"),
+            )
+        }
         factsBySlot["acquisition"]?.let { fact ->
             val methods = fact.items.mapNotNull { it.value.text }.distinct()
             if (methods.isNotEmpty()) immediate += EntryFact("获得方式", methods.joinToString("、"))
@@ -1310,6 +1327,11 @@ class Schema5WikiCatalogue @Inject constructor(
         "defense" -> "防御"
         "immunity" -> "免疫"
         "weapon_type" -> "武器类型"
+        "weapon_speed" -> "速度"
+        "weapon_precision" -> "精准"
+        "weapon_defense" -> "防御"
+        "weapon_crit_chance" -> "暴击率"
+        "weapon_crit_multiplier" -> "暴击倍率"
         "acquisition" -> "获得方式"
         "damage_min" -> "最低伤害"
         "damage_max" -> "最高伤害"
