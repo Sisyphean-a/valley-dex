@@ -206,28 +206,6 @@ class Schema5WikiCatalogue @Inject constructor(
                     target = target,
                 )
             }
-        } + incoming.filter {
-            !(it.predicate == "love_interest_pointer" && !subjectRomanceable)
-        }.map { relation ->
-            val target = targets[relation.subjectEntityId]?.let { summary ->
-                RelationTarget.Entry(
-                    id = summary.id,
-                    title = summary.nameZh,
-                    image = imageFor(summary.visual),
-                )
-            } ?: RelationTarget.Unavailable("关联内容暂未收录")
-            EntryRelation(
-                section = relation.family?.let { "反向关系·${relationFamilyLabel(it)}" } ?: "反向关系",
-                label = relation.label ?: relationLabel(relation.predicate),
-                details = listOfNotNull(
-                    conditionFact(relation.condition),
-                    EntryFact(
-                        "方向",
-                        "${targets[relation.subjectEntityId]?.nameZh ?: relation.subjectEntityId} → ${detail.summary.nameZh}",
-                    ),
-                ),
-                target = target,
-            )
         }
         return WikiEntry(
             id = detail.summary.id,
