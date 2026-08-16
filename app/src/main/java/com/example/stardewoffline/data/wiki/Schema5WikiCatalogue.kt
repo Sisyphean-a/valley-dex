@@ -1244,7 +1244,10 @@ class Schema5WikiCatalogue @Inject constructor(
                 val (season, day) = key.split("_")
                 "${SCHEDULE_SEASON_ZH[season] ?: season}${day}日"
             }
-            key.matches(SCHEDULE_MONTH_DAY_PATTERN) -> "每月${key.split("_")[0]}日（好感度条件）"
+            key.matches(SCHEDULE_MONTH_DAY_PATTERN) -> {
+                val (day, hearts) = key.split("_")
+                "每月${day}日（好感度${hearts}心以上）"
+            }
             key.all(Char::isDigit) -> "每月${key}日"
             else -> key
         }
