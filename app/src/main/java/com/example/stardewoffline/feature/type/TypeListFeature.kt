@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -50,6 +51,7 @@ import com.example.stardewoffline.core.datastore.AppPreferencesRepository
 import com.example.stardewoffline.core.model.CataloguePage
 import com.example.stardewoffline.core.model.CatalogueQuery
 import com.example.stardewoffline.core.ui.component.WikiEntryGridItem
+import com.example.stardewoffline.core.ui.component.WikiEntryListItem
 import com.example.stardewoffline.data.Schema5ContentRepository
 import com.example.stardewoffline.data.wiki.WikiCatalogue
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -80,7 +82,11 @@ class TypeListViewModel @Inject constructor(
     private val preferences: AppPreferencesRepository,
 ) : ViewModel() {
     private val categoryId = checkNotNull<String>(saved["categoryId"])
-    private val mutableState = MutableStateFlow(CatalogueUiState())
+    private val mutableState = MutableStateFlow(
+        CatalogueUiState(
+            selectedEntryCategory = if (categoryId == "type:shop") "常用" else null,
+        ),
+    )
     private val mutableRoot = MutableStateFlow<File?>(null)
     val state = mutableState.asStateFlow()
     val root = mutableRoot.asStateFlow()
@@ -262,26 +268,44 @@ private fun CatalogueContent(
             }
         } else {
             Column(Modifier.weight(1f).fillMaxWidth()) {
-                val fontScale = LocalDensity.current.fontScale
-                val gridMinSize = when {
-                    fontScale >= 2.0f -> 200.dp
-                    fontScale >= 1.3f -> 160.dp
-                    else -> 140.dp
-                }
-                LazyVerticalGrid(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    columns = GridCells.Adaptive(minSize = gridMinSize),
-                    contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(page.entries, key = { it.id }) { entry ->
-                        WikiEntryGridItem(
-                            entry = entry,
-                            packageRoot = root,
-                            showCategoryLabel = page.category.entityTypes.size > 1,
-                            onClick = { onDetail(entry.id) },
-                        )
+                if (page.category.entityTypes == setOf("shop") || page.category.entityTypes == setOf("quest")) {
+                    // 商店/任务：无图列式，信息密度优先。
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(page.entries, key = { it.id }) { entry ->
+                            WikiEntryListItem(
+                                entry = entry,
+                                packageRoot = root,
+                                showCategoryLabel = page.category.entityTypes.size > 1,
+                                onClick = { onDetail(entry.id) },
+                            )
+                        }
+                    }
+                } else {
+                    val fontScale = LocalDensity.current.fontScale
+                    val gridMinSize = when {
+                        fontScale >= 2.0f -> 200.dp
+                        fontScale >= 1.3f -> 160.dp
+                        else -> 140.dp
+                    }
+                    LazyVerticalGrid(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        columns = GridCells.Adaptive(minSize = gridMinSize),
+                        contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(page.entries, key = { it.id }) { entry ->
+                            WikiEntryGridItem(
+                                entry = entry,
+                                packageRoot = root,
+                                showCategoryLabel = page.category.entityTypes.size > 1,
+                                onClick = { onDetail(entry.id) },
+                            )
+                        }
                     }
                 }
                 if (page.nextCursor != null) {
@@ -337,9 +361,12 @@ private fun CategoryFilters(page: CataloguePage, selected: String?, onSelect: (S
         contentPadding = PaddingValues(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        item {
-            val allLabel = if (page.category.entityTypes == setOf("villager")) "全部村民" else "全部"
-            FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text(allLabel) })
+        val isShop = page.category.entityTypes == setOf("shop")
+        if (!isShop) {
+            item {
+                val allLabel = if (page.category.entityTypes == setOf("villager")) "全部村民" else "全部"
+                FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text(allLabel) })
+            }
         }
         items(categories) { category ->
             FilterChip(selected = selected == category, onClick = { onSelect(category) }, label = { Text(category) })

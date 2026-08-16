@@ -57,8 +57,13 @@ class Schema5WikiCatalogue @Inject constructor(
             .flatMap { it.categories }
             .firstOrNull { it.id == query.categoryId }
             ?: return@withActivePackage AppResult.Failure(AppError.InvalidManifest("未知图鉴分类：${query.categoryId}"))
-        val filters = query.entryCategory?.takeIf(String::isNotBlank)?.let {
-            mapOf("_any" to setOf(it))
+        val filters = query.entryCategory?.takeIf(String::isNotBlank)?.let { raw ->
+            val facetValue = when (raw) {
+                "常用" -> "普通商店"
+                "非常用" -> "节日商店"
+                else -> raw
+            }
+            mapOf("_any" to setOf(facetValue))
         }.orEmpty()
         val page = content.browse(
             types = category.entityTypes,

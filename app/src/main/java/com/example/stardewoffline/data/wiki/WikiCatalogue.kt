@@ -35,14 +35,21 @@ internal fun englishTitleForDisplay(title: String, englishTitle: String?): Strin
 
 internal fun filterLabelsFor(category: WikiCategory, entries: List<WikiEntrySummary>): List<String> = when {
     category.entityTypes == setOf("crop") -> listOf("春季", "夏季", "秋季", "冬季")
-    category.entityTypes == setOf("shop") -> listOf("普通商店", "节日商店")
+    category.entityTypes == setOf("shop") -> listOf("常用", "非常用")
     category.entityTypes == setOf("villager") -> listOf("不可结婚村民", "可结婚女性村民", "可结婚男性村民")
     else -> entries.flatMap(WikiEntrySummary::filterCategories).distinct().sorted()
 }
 
+/** 商店类型的玩家筛选标签：常用 = 普通商店，非常用 = 节日/活动商店。 */
+internal fun shopFilterLabel(facetText: String): String = when (facetText) {
+    "普通商店" -> "常用"
+    "节日商店" -> "非常用"
+    else -> facetText
+}
+
 /** Maps only typed schema-5 facet rows to the list filter labels. */
 internal fun browseFiltersFor(summary: Schema5EntitySummary): Set<String> =
-    summary.facets.mapNotNull { facet -> facet.value.text }.toSet()
+    summary.facets.mapNotNull { facet -> facet.value.text?.let(::shopFilterLabel) }.toSet()
 
 /** Shared category registry; support records are not browsable standalone entries. */
 object WikiCatalogueConfiguration {
