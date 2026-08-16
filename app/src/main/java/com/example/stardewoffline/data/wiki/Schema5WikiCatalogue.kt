@@ -951,6 +951,9 @@ class Schema5WikiCatalogue @Inject constructor(
     ): List<EntrySection> {
         val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
         val immediate = mutableListOf<EntryFact>()
+        factsBySlot["furniture_kind"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("类型", it)
+        }
         factsBySlot["purchase_price"]?.let { fact ->
             when {
                 fact.value?.integer != null -> immediate += EntryFact("购买价格", "${fact.value.integer} 金币")
@@ -1278,6 +1281,7 @@ class Schema5WikiCatalogue @Inject constructor(
         "drop_chance" -> "掉落概率"
         "drop_source" -> "掉落来源"
         "recipe_source" -> "获取方式"
+        "furniture_kind" -> "类型"
         "ginger_trigger_condition" -> "触发条件"
         "drops" -> "掉落"
         "health" -> "生命值"
