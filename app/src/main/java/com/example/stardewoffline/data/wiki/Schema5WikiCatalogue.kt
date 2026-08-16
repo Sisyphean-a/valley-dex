@@ -1120,7 +1120,7 @@ class Schema5WikiCatalogue @Inject constructor(
                             title = "日程记录",
                             items = fact.items.mapIndexed { index, item ->
                                 val details = scheduleDetails(item.value.text.orEmpty())
-                                WikiEntrySubmenuItem("记录 ${index + 1}", details)
+                                WikiEntrySubmenuItem(scheduleKeyLabel(item.scopeId, index), details)
                             },
                         ),
                     ),
@@ -1225,16 +1225,40 @@ class Schema5WikiCatalogue @Inject constructor(
         return listOfNotNull(schedule, gifts, uses, shopOffers, craftMaterials)
     }
 
-    /** 解析 builder 本地化后的日程文本：「8:00 山姆家」或规则「与周三日程相同」。 */
+    /** 日程条目标题：从可读 scope（schedule:Lewis:Tue）解析官方日程键的中文名。 */
+    private fun scheduleKeyLabel(scopeId: String?, fallbackIndex: Int): String {
+        val key = scopeId?.substringAfterLast(':') ?: return "日程 ${fallbackIndex + 1}"
+        return when {
+            key in SCHEDULE_DAY_ZH -> SCHEDULE_DAY_ZH.getValue(key)
+            key == "rain" -> "雨天"
+            key == "rain2" -> "雨天（备选）"
+            key == "GreenRain" -> "绿雨日"
+            key == "NO_SCHEDULE" || key == "NO_SCHEDULE_OWN" -> "无固定日程"
+            key.startsWith("DesertFestival_") -> "沙漠节 第${key.removePrefix("DesertFestival_")}天"
+            key.startsWith("marriage_") -> "婚后" + (SCHEDULE_DAY_ZH[key.removePrefix("marriage_")] ?: "")
+            SCHEDULE_SEASON_DAY.matches(key) -> {
+                val (season, day) = key.split("_")
+                "${SCHEDULE_SEASON_ZH[season] ?: season}${SCHEDULE_DAY_ZH[day] ?: day}"
+            }
+            SCHEDULE_DATE_PATTERN.matches(key) -> {
+                val (season, day) = key.split("_")
+                "${SCHEDULE_SEASON_ZH[season] ?: season}${day}日"
+            }
+            key.matches(SCHEDULE_MONTH_DAY_PATTERN) -> "每月${key.split("_")[0]}日（好感度条件）"
+            key.all(Char::isDigit) -> "每月${key}日"
+            else -> key
+        }
+    }
+
+    /** 解析 builder 本地化后的日程文本：「8:00 山姆家」「8:00–14:00 镇长庄园」或规则。 */
     private fun scheduleDetails(text: String): List<EntryFact> =
         text.split('；').mapNotNull { part ->
             val trimmed = part.trim()
             if (trimmed.isEmpty()) return@mapNotNull null
-            val separator = trimmed.indexOf(' ')
-            if (separator > 0 && TIME_PATTERN.matches(trimmed.substring(0, separator))) {
-                EntryFact("时间", trimmed)
-            } else {
-                EntryFact("规则", trimmed)
+            val head = trimmed.substringBefore(' ')
+            when {
+                TIME_RANGE_PATTERN.matches(head) || TIME_PATTERN.matches(head) -> EntryFact("时间", trimmed)
+                else -> EntryFact("规则", trimmed)
             }
         }
 
@@ -1375,6 +1399,18 @@ class Schema5WikiCatalogue @Inject constructor(
 
     private companion object {
         val TIME_PATTERN = Regex("^\\d{1,2}:\\d{2}$")
+        val TIME_RANGE_PATTERN = Regex("^\\d{1,2}:\\d{2}–\\d{1,2}:\\d{2}$")
+        val SCHEDULE_DATE_PATTERN = Regex("(spring|summer|fall|winter)_\\d+")
+        val SCHEDULE_SEASON_DAY = Regex("(spring|summer|fall|winter)_(Mon|Tue|Wed|Thu|Fri|Sat|Sun)")
+        val SCHEDULE_MONTH_DAY_PATTERN = Regex("\\d+_\\d+")
+
+        val SCHEDULE_DAY_ZH = mapOf(
+            "Mon" to "周一", "Tue" to "周二", "Wed" to "周三", "Thu" to "周四",
+            "Fri" to "周五", "Sat" to "周六", "Sun" to "周日",
+        )
+        val SCHEDULE_SEASON_ZH = mapOf(
+            "spring" to "春季", "summer" to "夏季", "fall" to "秋季", "winter" to "冬季",
+        )
 
         /** 描述已被类型化事实承载、无需「简介」的分类。 */
         val DESCRIPTION_FACT_TYPES = setOf("quest", "achievement", "special_order")
