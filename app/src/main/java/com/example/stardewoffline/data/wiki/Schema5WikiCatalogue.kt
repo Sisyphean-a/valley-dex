@@ -429,6 +429,13 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["special_order_reward"]?.value?.text?.takeIf(String::isNotBlank)?.let {
             immediate += EntryFact("奖励", it)
         }
+        factsBySlot["special_order_repeatable"]?.let { fact ->
+            when (fact.value?.boolean) {
+                true -> immediate += EntryFact("可重复", "是")
+                false -> immediate += EntryFact("可重复", "否")
+                null -> Unit
+            }
+        }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
         return sections
@@ -1014,6 +1021,12 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["recipe_source"]?.value?.text?.takeIf(String::isNotBlank)?.let {
             immediate += EntryFact("获取方式", it)
         }
+        factsBySlot["edibility"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("食用效果", it)
+        }
+        factsBySlot["food_buffs"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("增益", it)
+        }
         materialRows.take(4).forEach { (name, quantity) ->
             immediate += EntryFact("材料", listOfNotNull(name, quantity?.let { "×$it" }).joinToString(" "))
         }
@@ -1280,6 +1293,7 @@ class Schema5WikiCatalogue @Inject constructor(
         "special_order_duration" -> "时限"
         "special_order_objective" -> "目标"
         "special_order_reward" -> "奖励"
+        "special_order_repeatable" -> "可重复"
         "fish_pond_outputs" -> "鱼塘产出"
         "tailoring_materials" -> "所需材料"
         "drop_chance" -> "掉落概率"
