@@ -367,6 +367,9 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["bundle_ingredients"]?.value?.text?.takeIf(String::isNotBlank)?.let {
             immediate += EntryFact("所需物品", it)
         }
+        factsBySlot["bundle_reward"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("奖励", it)
+        }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
         return sections
@@ -782,6 +785,12 @@ class Schema5WikiCatalogue @Inject constructor(
         val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
         val immediate = mutableListOf<EntryFact>()
         factsBySlot["sell_price"]?.value?.integer?.let { immediate += EntryFact("出售价格", "$it 金币") }
+        factsBySlot["edibility"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("食用效果", it)
+        }
+        factsBySlot["food_buffs"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("增益", it)
+        }
         resolvedNames(factsBySlot["used_in"], targets).takeIf { it.isNotEmpty() }?.let {
             immediate += EntryFact("用途", it.joinToString("、"))
         }
@@ -1218,6 +1227,9 @@ class Schema5WikiCatalogue @Inject constructor(
         "achievement_secret" -> "隐藏成就"
         "bundle_area" -> "所在区域"
         "bundle_ingredients" -> "所需物品"
+        "bundle_reward" -> "奖励"
+        "edibility" -> "食用效果"
+        "food_buffs" -> "增益"
         "special_order_requester" -> "委托人"
         "special_order_duration" -> "时限"
         "special_order_objective" -> "目标"
