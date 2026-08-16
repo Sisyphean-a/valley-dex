@@ -853,6 +853,9 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["drop_sources"]?.value?.text?.takeIf(String::isNotBlank)?.let {
             immediate += EntryFact("怪物掉落", it)
         }
+        factsBySlot["museum_reward"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("博物馆捐赠奖励", it)
+        }
         resolvedNames(factsBySlot["used_in"], targets).takeIf { it.isNotEmpty() }?.let {
             immediate += EntryFact("用途", it.joinToString("、"))
         }
@@ -1306,6 +1309,7 @@ class Schema5WikiCatalogue @Inject constructor(
         "food_buffs" -> "增益"
         "gift_likers" -> "送礼"
         "drop_sources" -> "怪物掉落"
+        "museum_reward" -> "博物馆捐赠奖励"
         "special_order_requester" -> "委托人"
         "special_order_duration" -> "时限"
         "special_order_objective" -> "目标"
