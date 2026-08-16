@@ -3,9 +3,12 @@ package com.example.stardewoffline.core.ui.component
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CardGiftcard
+import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.ImageNotSupported
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.Warning
@@ -103,6 +106,9 @@ private fun MissingImage(name: String, categoryLabel: String?, modifier: Modifie
 private fun missingImageIcon(categoryLabel: String?) = when {
     categoryLabel.isNullOrBlank() -> Icons.Outlined.ImageNotSupported
     categoryLabel.containsAny("商店", "shop") -> Icons.Outlined.Storefront
+    categoryLabel.containsAny("任务", "quest") -> Icons.Outlined.Assignment
+    categoryLabel.containsAny("成就", "achievement") -> Icons.Outlined.EmojiEvents
+    categoryLabel.containsAny("收集包", "bundle") -> Icons.Outlined.Inventory2
     categoryLabel.containsAny("日程", "schedule") -> Icons.Outlined.CalendarMonth
     categoryLabel.containsAny("礼物", "gift") -> Icons.Outlined.CardGiftcard
     categoryLabel.containsAny("人物", "村民", "villager", "npc") -> Icons.Outlined.Person

@@ -184,9 +184,11 @@ class RealV5PlayerGateTest {
         }
         val immediate = entry.sections.firstOrNull { it.title == "立即行动" }?.facts.orEmpty()
         val labels = immediate.map { it.label }
-        if (labels.take(3) != listOf("地点", "营业时间", "店主")) {
+        if (labels.take(4) != listOf("商店类型", "地点", "营业时间", "店主")) {
             violations += "商店立即行动顺序违反契约：$labels"
         }
+        val kind = immediate.firstOrNull { it.label == "商店类型" }?.value
+        if (kind != "普通商店") violations += "商店类型错误：$kind"
         val location = immediate.firstOrNull { it.label == "地点" }?.value
         if (location != "皮埃尔杂货店") violations += "商店地点错误：$location"
         val hours = immediate.firstOrNull { it.label == "营业时间" }?.value.orEmpty()
@@ -299,11 +301,14 @@ class RealV5PlayerGateTest {
         }
         val immediate = entry.sections.firstOrNull { it.title == "立即行动" }?.facts.orEmpty()
         val labels = immediate.map { it.label }
-        if (labels.take(4) != listOf("出现地点", "生命值", "伤害", "掉落")) {
+        if (labels.take(5) != listOf("出现地点", "出现楼层", "生命值", "伤害", "掉落")) {
             violations += "绿色史莱姆立即行动顺序违反怪物契约：$labels"
         }
         if (immediate.firstOrNull { it.label == "出现地点" }?.value != "矿井") {
             violations += "绿色史莱姆出现地点错误：${immediate.firstOrNull { it.label == "出现地点" }?.value}"
+        }
+        if (immediate.firstOrNull { it.label == "出现楼层" }?.value != "矿井 1-39 层") {
+            violations += "绿色史莱姆出现楼层错误：${immediate.firstOrNull { it.label == "出现楼层" }?.value}"
         }
         if (immediate.firstOrNull { it.label == "生命值" }?.value != "24") {
             violations += "绿色史莱姆生命值错误：${immediate.firstOrNull { it.label == "生命值" }?.value}"

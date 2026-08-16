@@ -20,6 +20,9 @@ import com.example.stardewoffline.core.model.Schema5Fact
 import com.example.stardewoffline.core.model.Schema5FactStatus
 import com.example.stardewoffline.core.model.Schema5VisualStatus
 import com.example.stardewoffline.core.model.Schema5Relation
+import com.example.stardewoffline.core.model.ShopKind
+import com.example.stardewoffline.core.model.ShopOwner
+import com.example.stardewoffline.core.model.ShopPresentation
 import com.example.stardewoffline.core.model.WikiEntry
 import com.example.stardewoffline.core.model.WikiEntrySubmenu
 import com.example.stardewoffline.core.model.WikiEntrySubmenuGroup
@@ -228,7 +231,7 @@ class Schema5WikiCatalogue @Inject constructor(
             categoryLabel = typeLabel,
             image = imageFor(detail.summary.visual),
             summary = detail.summary.card.identitySummary ?: detail.summary.descriptionZh ?: detail.summary.descriptionEn,
-            sections = typedSections(detail, incoming, targets),
+            sections = typedSections(detail, targets),
             relations = relations,
             submenus = supportSubmenus(detail, targets),
         )
@@ -236,7 +239,6 @@ class Schema5WikiCatalogue @Inject constructor(
 
     private fun typedSections(
         detail: Schema5EntityDetail,
-        incomingRelations: List<Schema5Relation>,
         targets: Map<String, Schema5EntitySummary>,
     ): List<EntrySection> {
         if (detail.summary.entityType == "villager") return villagerSections(detail, targets)
@@ -254,7 +256,106 @@ class Schema5WikiCatalogue @Inject constructor(
         if (detail.summary.entityType == "furniture") return furnitureSections(detail, targets)
         if (detail.summary.entityType == "footwear") return footwearSections(detail, targets)
         if (detail.summary.entityType == "cooking_recipe") return cookingSections(detail, targets)
-        return genericSections(detail, incomingRelations, targets)
+        if (detail.summary.entityType == "quest") return questSections(detail, targets)
+        if (detail.summary.entityType == "achievement") return achievementSections(detail)
+        if (detail.summary.entityType == "bundle") return bundleSections(detail)
+        if (detail.summary.entityType == "special_order") return specialOrderSections(detail)
+        return genericSections(detail, targets)
+    }
+
+    /**
+     * 任务详情：类型与目标优先，奖励/可重复紧随其后；讨伐任务目标
+     * 与金币奖励已由 builder 投影。
+     */
+    private fun questSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["quest_type"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("任务类型", it)
+        }
+        factsBySlot["quest_objective"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("任务目标", it)
+        }
+        factsBySlot["quest_reward"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("任务奖励", it)
+        }
+        factsBySlot["quest_repeatable"]?.let { fact ->
+            when (fact.value?.boolean) {
+                true -> immediate += EntryFact("可重复", "是")
+                false -> immediate += EntryFact("可重复", "否")
+                null -> Unit
+            }
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        val description = detail.summary.descriptionZh
+        if (!description.isNullOrBlank()) {
+            sections += EntrySection("任务说明", listOf(EntryFact("说明", description)))
+        }
+        return sections
+    }
+
+    /**
+     * 成就详情：解锁条件即成就描述；隐藏成就单独标注。
+     */
+    private fun achievementSections(detail: Schema5EntityDetail): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["achievement_description"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("解锁条件", it)
+        }
+        factsBySlot["achievement_secret"]?.let { fact ->
+            when (fact.value?.boolean) {
+                true -> immediate += EntryFact("隐藏成就", "是（未达成前不显示）")
+                false -> immediate += EntryFact("隐藏成就", "否")
+                null -> Unit
+            }
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        return sections
+    }
+
+    /**
+     * 收集包详情：所在区域与所需物品。
+     */
+    private fun bundleSections(
+        detail: Schema5EntityDetail,
+    ): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["bundle_area"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("所在区域", it)
+        }
+        factsBySlot["bundle_ingredients"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("所需物品", it)
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        return sections
+    }
+
+    /**
+     * 特殊订单详情：委托人、时限与目标。
+     */
+    private fun specialOrderSections(detail: Schema5EntityDetail): List<EntrySection> {
+        val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
+        val immediate = mutableListOf<EntryFact>()
+        factsBySlot["special_order_requester"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("委托人", it)
+        }
+        factsBySlot["special_order_duration"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("时限", it)
+        }
+        factsBySlot["special_order_objective"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("目标", it)
+        }
+        val sections = mutableListOf<EntrySection>()
+        if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
+        return sections
     }
 
     /**
@@ -287,8 +388,6 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["sell_price"]?.value?.integer?.let { immediate += EntryFact("出售价格", "$it 金币") }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
         return sections
     }
 
@@ -320,8 +419,7 @@ class Schema5WikiCatalogue @Inject constructor(
         }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -335,6 +433,9 @@ class Schema5WikiCatalogue @Inject constructor(
     ): List<EntrySection> {
         val factsBySlot = detail.facts.associateBy(Schema5Fact::slotKey)
         val immediate = mutableListOf<EntryFact>()
+        factsBySlot["shop_kind"]?.items?.firstOrNull()?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("商店类型", it)
+        }
         factsBySlot["location"]?.items?.firstOrNull()?.value?.text?.let {
             immediate += EntryFact("地点", it)
         }
@@ -351,8 +452,7 @@ class Schema5WikiCatalogue @Inject constructor(
         offers.take(3).forEach { (label, _) -> immediate += EntryFact("商品", label) }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -451,8 +551,7 @@ class Schema5WikiCatalogue @Inject constructor(
         }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -502,8 +601,7 @@ class Schema5WikiCatalogue @Inject constructor(
         detail.aliases.takeIf { it.isNotEmpty() }?.let {
             sections += EntrySection("别名", listOf(EntryFact("别名", it.joinToString("、"))))
         }
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -553,8 +651,7 @@ class Schema5WikiCatalogue @Inject constructor(
                 sections += EntrySection("捕捞地点详情", factRows(fact, targets))
             }
         }
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -572,6 +669,9 @@ class Schema5WikiCatalogue @Inject constructor(
             val locations = fact.items.mapNotNull { it.value.text }.distinct()
             if (locations.isNotEmpty()) immediate += EntryFact("出现地点", locations.joinToString("、"))
         }
+        factsBySlot["floors"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("出现楼层", it)
+        }
         factsBySlot["health"]?.value?.integer?.let { immediate += EntryFact("生命值", it.toString()) }
         factsBySlot["damage"]?.value?.integer?.let { immediate += EntryFact("伤害", it.toString()) }
         factsBySlot["drops"]?.let { fact ->
@@ -587,8 +687,7 @@ class Schema5WikiCatalogue @Inject constructor(
                 sections += EntrySection("掉落详情", factRows(fact, targets))
             }
         }
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -620,8 +719,7 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["sell_price"]?.value?.integer?.let { extra += EntryFact("出售价格", "$it 金币") }
         factsBySlot["purchase_price"]?.value?.integer?.let { extra += EntryFact("购买价格", "$it 金币") }
         if (extra.isNotEmpty()) sections += EntrySection("更多资料", extra)
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -652,8 +750,7 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["used_in"]?.let { fact ->
             if (fact.items.isNotEmpty()) sections += EntrySection("用途详情", usageRows(detail, targets))
         }
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -670,8 +767,7 @@ class Schema5WikiCatalogue @Inject constructor(
         immediate += purchaseInfoFacts(detail, targets)
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -789,8 +885,7 @@ class Schema5WikiCatalogue @Inject constructor(
         resolvedNames(factsBySlot["used_in"], targets).takeIf { it.isNotEmpty() }?.let {
             sections += EntrySection("更多资料", listOf(EntryFact("用途", it.joinToString("、"))))
         }
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -806,8 +901,7 @@ class Schema5WikiCatalogue @Inject constructor(
         immediate += purchaseInfoFacts(detail, targets)
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -834,8 +928,7 @@ class Schema5WikiCatalogue @Inject constructor(
                 sections += EntrySection("更多资料", listOf(EntryFact("产物", name)))
             }
         }
-        val notes = dataNotes(detail, emptyList())
-        if (notes.isNotEmpty()) sections += EntrySection("数据说明", notes)
+
         return sections
     }
 
@@ -857,7 +950,6 @@ class Schema5WikiCatalogue @Inject constructor(
 
     private fun genericSections(
         detail: Schema5EntityDetail,
-        incomingRelations: List<Schema5Relation>,
         targets: Map<String, Schema5EntitySummary>,
     ): List<EntrySection> {
         val cardFacts = listOfNotNull(
@@ -868,26 +960,10 @@ class Schema5WikiCatalogue @Inject constructor(
         val aliases = detail.aliases.takeIf { it.isNotEmpty() }?.let {
             EntrySection("别名", listOf(EntryFact("别名", it.joinToString("、"))))
         }
-        val notes = dataNotes(detail, incomingRelations)
         return listOfNotNull(
             facts.takeIf { it.isNotEmpty() }?.let { EntrySection("核心信息", it) },
             aliases,
-            notes.takeIf { it.isNotEmpty() }?.let { EntrySection("数据说明", it) },
         )
-    }
-
-    /** 数据说明只使用玩家可理解文案；技术细节留在数据库与诊断入口。 */
-    private fun dataNotes(
-        detail: Schema5EntityDetail,
-        incomingRelations: List<Schema5Relation>,
-    ): List<EntryFact> {
-        val phrases = (
-            detail.facts.flatMap { it.sources } +
-                detail.relationGroups.flatMap { group -> group.relations.flatMap { it.sources } } +
-                incomingRelations.flatMap { it.sources }
-            ).map { source -> sourcePhrase(source) }
-            .distinct()
-        return phrases.map { EntryFact("来源", it) }
     }
 
     private fun supportSubmenus(
@@ -1084,6 +1160,19 @@ class Schema5WikiCatalogue @Inject constructor(
         "schedule" -> "日程"
         "gift_preferences" -> "礼物偏好"
         "locations" -> "出现地点"
+        "floors" -> "出现楼层"
+        "shop_kind" -> "商店类型"
+        "quest_type" -> "任务类型"
+        "quest_objective" -> "任务目标"
+        "quest_reward" -> "任务奖励"
+        "quest_repeatable" -> "可重复"
+        "achievement_description" -> "解锁条件"
+        "achievement_secret" -> "隐藏成就"
+        "bundle_area" -> "所在区域"
+        "bundle_ingredients" -> "所需物品"
+        "special_order_requester" -> "委托人"
+        "special_order_duration" -> "时限"
+        "special_order_objective" -> "目标"
         "drops" -> "掉落"
         "health" -> "生命值"
         "damage" -> "伤害"
@@ -1125,14 +1214,6 @@ class Schema5WikiCatalogue @Inject constructor(
     private companion object {
         val TIME_PATTERN = Regex("^\\d{1,2}:\\d{2}$")
     }
-
-    /** 普通页面只允许玩家可理解来源文案；路径、版本、证据与转换规则留在诊断层。 */
-    private fun sourcePhrase(source: com.example.stardewoffline.core.model.Schema5SourceSummary): String =
-        when (source.kind) {
-            "official_direct" -> "依据游戏数据整理"
-            "official_derived" -> "依据游戏数据计算"
-            else -> "依据游戏数据整理"
-        }
 
     private fun relationFamilyLabel(family: String): String = when (family) {
         "kinship" -> "亲属关系"
@@ -1180,10 +1261,42 @@ class Schema5WikiCatalogue @Inject constructor(
             categoryLabel = label,
             filterCategories = summary.facets.mapNotNull { it.value.text }.toSet(),
             image = imageFor(summary.visual),
-            shop = null,
+            shop = if (summary.entityType == "shop") shopPresentation(summary) else null,
             actionSummary1 = summary.card.actionSummary1,
             actionSummary2 = summary.card.actionSummary2,
         )
+
+    /** 商店列表卡：性质分类 + 店主 + 商品数，无图商店不再用占位图。 */
+    private fun shopPresentation(summary: Schema5EntitySummary): ShopPresentation? {
+        val kindLabel = summary.facets
+            .firstOrNull { it.scopeFamily == "shop_kind" }
+            ?.value?.text
+        val kind = shopKindOf(kindLabel)
+        val ownerName = summary.facets
+            .firstOrNull { it.scopeFamily == "shop_owner" }
+            ?.value?.text
+        return ShopPresentation(
+            owner = ownerName?.takeIf(String::isNotBlank)?.let {
+                ShopOwner(id = it, title = it, image = EntryImage.Missing)
+            },
+            offerCount = summary.facets
+                .firstOrNull { it.scopeFamily == "shop_offer_count" }
+                ?.value?.integer
+                ?.toInt()
+                ?: 0,
+            kind = kind,
+        )
+    }
+
+    private fun shopKindOf(label: String?): ShopKind = when (label) {
+        "节日商店" -> ShopKind.FESTIVAL
+        "旅行商人" -> ShopKind.TRAVELING
+        "兑换" -> ShopKind.EXCHANGE
+        "赌场" -> ShopKind.CASINO
+        "书摊" -> ShopKind.BOOKSELLER
+        "火山商店" -> ShopKind.VOLCANO
+        else -> ShopKind.GENERAL
+    }
 
     private fun imageFor(visual: com.example.stardewoffline.core.model.Schema5Visual?): EntryImage = when {
         visual == null || visual.status == Schema5VisualStatus.OFFICIAL_NONE -> Missing

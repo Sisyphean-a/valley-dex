@@ -105,12 +105,31 @@ fun WikiEntryGridItem(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            EntryVisual(entry, packageRoot, Modifier.fillMaxWidth().aspectRatio(1f))
-            Text(entry.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            englishTitle(entry)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            EntryMeta(entry, showCategoryLabel)
-            entry.actionSummary1?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            entry.actionSummary2?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            val imageLess = isImageLessCategory(entry.categoryLabel) && entry.image.relativePath() == null
+            if (imageLess) {
+                // 无图分类：不占整行图片位，只显示类型图标与文字。
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TypeMark(entry.categoryLabel, Modifier.size(44.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(entry.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        englishTitle(entry)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        EntryMeta(entry, showCategoryLabel)
+                    }
+                }
+                entry.actionSummary1?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                entry.actionSummary2?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            } else {
+                EntryVisual(entry, packageRoot, Modifier.fillMaxWidth().aspectRatio(1f))
+                Text(entry.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                englishTitle(entry)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                EntryMeta(entry, showCategoryLabel)
+                entry.actionSummary1?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                entry.actionSummary2?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
         }
     }
 }
@@ -122,9 +141,25 @@ private fun EntryVisual(entry: WikiEntrySummary, packageRoot: File?, modifier: M
         entry.image is EntryImage.PackageError || entry.image is EntryImage.Proxy ->
             EntryImageStatus(entry.image, packageRoot, entry.title, entry.categoryLabel, modifier)
         entry.image.relativePath() != null -> EntityImage(entry.image.relativePath(), packageRoot, entry.title, modifier, entry.categoryLabel)
-        shop?.owner != null -> EntityImage(shop.owner.image.relativePath(), packageRoot, shop.owner.title, modifier, "村民")
+        shop?.owner != null && shop.owner.image.relativePath() != null ->
+            EntityImage(shop.owner.image.relativePath(), packageRoot, shop.owner.title, modifier, "村民")
         shop != null -> ShopNatureMark(shop, modifier)
+        isImageLessCategory(entry.categoryLabel) -> TypeMark(entry.categoryLabel, modifier)
         else -> EntryImageStatus(entry.image, packageRoot, entry.title, entry.categoryLabel, modifier)
+    }
+}
+
+/** 无图分类：商店、任务、成就、收集包与特殊订单不渲染图片占位，改用类型图标。 */
+private fun isImageLessCategory(label: String): Boolean =
+    label.matchesAny("商店", "任务", "成就", "收集包", "特殊订单", "掉落")
+
+@Composable
+private fun TypeMark(label: String, modifier: Modifier) {
+    Surface(modifier = modifier, color = typeMarkColor(label), shape = MaterialTheme.shapes.medium) {
+        Column(Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(entryTypeIcon(label), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -169,16 +204,6 @@ private fun shopKindLabel(kind: ShopKind): String = when (kind) {
     ShopKind.BOOKSELLER -> "书摊"
     ShopKind.VOLCANO -> "火山"
     ShopKind.GENERAL -> "商店"
-}
-
-@Composable
-private fun EntryTypeMark(label: String, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier.size(54.dp), color = typeMarkColor(label), shape = MaterialTheme.shapes.medium) {
-        Column(Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(entryTypeIcon(label), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
 }
 
 private fun entryTypeIcon(label: String) = when {

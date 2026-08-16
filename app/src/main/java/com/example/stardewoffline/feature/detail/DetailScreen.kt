@@ -118,8 +118,12 @@ private fun DetailTopBar(name: String, favorite: Boolean, onBack: () -> Unit, on
 private fun DetailHeader(entry: WikiEntry, packageRoot: java.io.File?, modifier: Modifier) {
     Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = DetailGreen, shadowElevation = 3.dp) {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(color = Color(0xFFEFE8D9), shape = MaterialTheme.shapes.medium, modifier = Modifier.size(92.dp)) {
-                EntryImageStatus(entry.image, packageRoot, entry.title, entry.categoryLabel, Modifier.padding(6.dp))
+            // 无图分类（任务/成就/收集包/特殊订单等）不渲染图片占位框，
+            // 头部直接以文字为主；商店等仍有视觉的条目保留图片位。
+            if (entry.image !is com.example.stardewoffline.core.model.EntryImage.Missing) {
+                Surface(color = Color(0xFFEFE8D9), shape = MaterialTheme.shapes.medium, modifier = Modifier.size(92.dp)) {
+                    EntryImageStatus(entry.image, packageRoot, entry.title, entry.categoryLabel, Modifier.padding(6.dp))
+                }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(entry.title, style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
