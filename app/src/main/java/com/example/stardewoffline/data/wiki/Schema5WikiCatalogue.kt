@@ -404,6 +404,9 @@ class Schema5WikiCatalogue @Inject constructor(
         factsBySlot["special_order_objective"]?.value?.text?.takeIf(String::isNotBlank)?.let {
             immediate += EntryFact("目标", it)
         }
+        factsBySlot["special_order_reward"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("奖励", it)
+        }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
         return sections
@@ -681,6 +684,9 @@ class Schema5WikiCatalogue @Inject constructor(
         }
         factsBySlot["difficulty"]?.value?.integer?.let {
             immediate += EntryFact("难度", "$it / 110")
+        }
+        factsBySlot["fish_pond_outputs"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("鱼塘产出", it)
         }
         val sections = mutableListOf<EntrySection>()
         if (immediate.isNotEmpty()) sections += EntrySection("立即行动", immediate)
@@ -1244,6 +1250,8 @@ class Schema5WikiCatalogue @Inject constructor(
         "special_order_requester" -> "委托人"
         "special_order_duration" -> "时限"
         "special_order_objective" -> "目标"
+        "special_order_reward" -> "奖励"
+        "fish_pond_outputs" -> "鱼塘产出"
         "tailoring_materials" -> "所需材料"
         "drop_chance" -> "掉落概率"
         "drop_source" -> "掉落来源"
