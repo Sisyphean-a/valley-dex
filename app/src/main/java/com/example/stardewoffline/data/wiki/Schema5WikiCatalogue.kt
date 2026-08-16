@@ -237,7 +237,29 @@ class Schema5WikiCatalogue @Inject constructor(
         )
     }
 
+    /**
+     * 详情页分节入口：在类型化内容前后插入「简介」（官方描述）。
+     *
+     * 任务/成就/特殊订单的描述已被类型化事实承载（任务说明/解锁条件/目标），
+     * 不再重复展示；其余分类在「立即行动」之后给出官方简介。
+     */
     private fun typedSections(
+        detail: Schema5EntityDetail,
+        targets: Map<String, Schema5EntitySummary>,
+    ): List<EntrySection> {
+        val sections = typedContentSections(detail, targets).toMutableList()
+        val description = detail.summary.descriptionZh
+        if (!description.isNullOrBlank() && detail.summary.entityType !in DESCRIPTION_FACT_TYPES) {
+            val insertAt = sections.indexOfFirst { it.title == "立即行动" } + 1
+            sections.add(
+                insertAt,
+                EntrySection("简介", listOf(EntryFact("简介", description))),
+            )
+        }
+        return sections
+    }
+
+    private fun typedContentSections(
         detail: Schema5EntityDetail,
         targets: Map<String, Schema5EntitySummary>,
     ): List<EntrySection> {
@@ -1297,6 +1319,9 @@ class Schema5WikiCatalogue @Inject constructor(
 
     private companion object {
         val TIME_PATTERN = Regex("^\\d{1,2}:\\d{2}$")
+
+        /** 描述已被类型化事实承载、无需「简介」的分类。 */
+        val DESCRIPTION_FACT_TYPES = setOf("quest", "achievement", "special_order")
     }
 
     private fun relationFamilyLabel(family: String): String = when (family) {
