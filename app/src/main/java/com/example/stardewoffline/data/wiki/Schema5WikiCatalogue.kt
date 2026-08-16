@@ -619,6 +619,9 @@ class Schema5WikiCatalogue @Inject constructor(
             val harvest = fact.value?.text?.let { targets[it]?.nameZh ?: it }
             if (!harvest.isNullOrBlank()) immediate += EntryFact("收获物", harvest)
         }
+        factsBySlot["harvest_quantity"]?.value?.text?.takeIf(String::isNotBlank)?.let {
+            immediate += EntryFact("收获数量", it)
+        }
         factsBySlot["needs_watering"]?.let { fact ->
             if (fact.value?.boolean == false) immediate += EntryFact("关键要求", "不需要每天浇水")
         }
@@ -753,6 +756,7 @@ class Schema5WikiCatalogue @Inject constructor(
         }
         factsBySlot["health"]?.value?.integer?.let { immediate += EntryFact("生命值", it.toString()) }
         factsBySlot["damage"]?.value?.integer?.let { immediate += EntryFact("伤害", it.toString()) }
+        factsBySlot["monster_xp"]?.value?.integer?.let { immediate += EntryFact("经验值", it.toString()) }
         factsBySlot["drops"]?.let { fact ->
             val names = fact.items
                 .mapNotNull { item -> item.value.text?.let { targets[it]?.nameZh ?: it } }
@@ -1282,10 +1286,13 @@ class Schema5WikiCatalogue @Inject constructor(
         "drop_source" -> "掉落来源"
         "recipe_source" -> "获取方式"
         "furniture_kind" -> "类型"
+        "harvest_quantity" -> "收获数量"
         "ginger_trigger_condition" -> "触发条件"
         "drops" -> "掉落"
         "health" -> "生命值"
         "damage" -> "伤害"
+        "monster_xp" -> "经验值"
+        "monster_resilience" -> "防御"
         "defense" -> "防御"
         "immunity" -> "免疫"
         "weapon_type" -> "武器类型"
