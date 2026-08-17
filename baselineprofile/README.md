@@ -2,11 +2,9 @@
 
 此模块面向 `:app` 的 `benchmarkRelease` 变体生成 Baseline Profile，并测量冷启动、分类筛选和进入详情的帧耗时。
 
-## 受控数据
+## 当前状态
 
-`app/src/benchmarkRelease/assets/default-data/stardew-benchmark-fixture.svdata` 是一个只含两个合成条目的 schema 4 测试包，固定包含“作物”分类和“萝卜种子”。它随**基准变体**安装，不进入 debug 或正式 release 包，也不包含真实游戏数据、图片或玩家信息。
-
-每项性能测试会清除目标基准应用的数据，让应用通过正常的内置包启动流程导入该合成包；导入完成后才开始采样。因此数据包导入和系统文件选择器不会混入启动或交互指标。受控包不存在、无法通过校验或页面路径不符合预期时测试会直接失败。
+`app/src/benchmarkRelease/assets/default-data/stardew-benchmark-fixture.svdata` 仍是只含两个合成条目的 schema 4 fixture。当前应用的普通安装路径只接受 schema 5，因此清空目标应用数据后，该 fixture 不能可靠地让基准路径进入图鉴；在 fixture 升级为发布级 schema 5 包前，不得把宏基准输出视为性能验收。
 
 ## 前提
 

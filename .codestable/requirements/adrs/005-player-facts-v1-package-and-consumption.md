@@ -40,4 +40,4 @@ schema 4 只提供通用实体列和 `extra_json.officialDerived`。应用需要
 
 ## 相关历史
 
-见 `.codestable/history/2026-08.md` 的 player-facts-v1 契约条目，以及 `.wayfinding/player-first-encyclopedia/decisions/09-cross-repo-data-contract.md`。
+见 `.codestable/history/2026-08.md` 的 player-facts-v1 契约条目和提交 `54acb84`。

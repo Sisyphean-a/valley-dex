@@ -15,7 +15,7 @@ code-paths:
 
 - `baselineprofile/build.gradle.kts` 将 `targetProjectPath` 指向 `:app`，使用 Java/Kotlin 17。
 - `baselineprofile/src/main/java` 是性能路径定义位置；页面和数据包契约的变化应通过 `:app` 的真实行为验证，不在此包复制规则。
-- `app/src/benchmarkRelease/assets/default-data/stardew-benchmark-fixture.svdata` 是仅随 benchmarkRelease 打包的合成 schema 4 包；它固定提供“作物”和“萝卜种子”，不含真实游戏或玩家数据。测试在采样前清除该变体数据并走普通内置包导入，随后测量冷启动、分类内筛选和详情路径。
+- `app/src/benchmarkRelease/assets/default-data/stardew-benchmark-fixture.svdata` 仍是仅随 benchmarkRelease 打包的合成 schema 4 包；它固定提供“作物”和“萝卜种子”，不含真实游戏或玩家数据。当前普通安装只接受 schema 5，清空数据后的基准路径因此无法可靠进入图鉴；升级 fixture 前不得将宏基准输出作为性能验收。
 
 ## 验证
 
